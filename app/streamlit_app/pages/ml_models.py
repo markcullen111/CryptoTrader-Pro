@@ -1,611 +1,652 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import plotly.graph_objects as go
 import plotly.express as px
-import numpy as np
 from datetime import datetime, timedelta
 import logging
-import random
+from app.ml.model_manager import ModelManager
+from app.ml.feature_engineer import FeatureEngineer
+from app.trading.exchange_client import ExchangeClient
 import time
 
 logger = logging.getLogger(__name__)
 
-def show(config):
-    """Show the ML models page."""
-    st.title("Machine Learning Models")
+@st.cache_resource(ttl=300)  # Cache for 5 minutes
+def get_model_manager():
+    """Get model manager instance."""
+    return ModelManager()
+
+@st.cache_resource(ttl=300)
+def get_feature_engineer():
+    """Get feature engineer instance."""
+    return FeatureEngineer()
+
+@st.cache_resource(ttl=300)
+def get_exchange_client():
+    """Get exchange client instance."""
+    return ExchangeClient()
+
+@st.cache_data(ttl=300)
+def get_models():
+    """Get list of models."""
+    try:
+        model_manager = get_model_manager()
+        return model_manager.get_models()
+    except Exception as e:
+        logger.error(f"Error getting models: {e}")
+        return None
+
+@st.cache_data(ttl=300)
+def get_model_metrics(model_id):
+    """Get model metrics."""
+    try:
+        model_manager = get_model_manager()
+        return model_manager.get_model_metrics(model_id)
+    except Exception as e:
+        logger.error(f"Error getting model metrics: {e}")
+        return None
+
+@st.cache_data(ttl=300)
+def get_feature_importance(model_id):
+    """Get feature importance."""
+    try:
+        model_manager = get_model_manager()
+        return model_manager.get_feature_importance(model_id)
+    except Exception as e:
+        logger.error(f"Error getting feature importance: {e}")
+        return None
+
+@st.cache_data(ttl=300)
+def get_recent_predictions(model_id):
+    """Get recent predictions."""
+    try:
+        model_manager = get_model_manager()
+        return model_manager.get_recent_predictions(model_id)
+    except Exception as e:
+        logger.error(f"Error getting recent predictions: {e}")
+        return None
+
+@st.cache_data(ttl=300)
+def get_model_comparison(model_ids):
+    """Get model comparison metrics."""
+    try:
+        model_manager = get_model_manager()
+        return model_manager.compare_models(model_ids)
+    except Exception as e:
+        logger.error(f"Error comparing models: {e}")
+        return None
+
+def show():
+    """Display the ML Models page."""
+    st.title("ML Models")
     
-    # Create tabs for different ML functionality
-    tab1, tab2, tab3 = st.tabs(["Model Overview", "Model Training", "Model Predictions"])
-    
-    # Models tab
-    with tab1:
-        st.subheader("Available Models")
+    try:
+        # Get model manager
+        model_manager = get_model_manager()
         
-        # Mock model data
-        models_data = {
-            "model_id": ["lstm_btc_1h_001", "xgboost_eth_4h_001", "prophet_btc_1d_001", "ensemble_btc_1h_001"],
-            "type": ["LSTM", "XGBoost", "Prophet", "Ensemble"],
-            "asset": ["BTC/USDT", "ETH/USDT", "BTC/USDT", "BTC/USDT"],
-            "timeframe": ["1h", "4h", "1d", "1h"],
-            "accuracy": [0.68, 0.72, 0.65, 0.76],
-            "created_at": ["2023-07-15", "2023-07-20", "2023-07-25", "2023-08-01"],
-            "status": ["Active", "Active", "Inactive", "Active"]
-        }
+        # Create tabs for different views
+        tab1, tab2, tab3, tab4 = st.tabs(["Model Management", "Performance Analysis", "Feature Analysis", "Real-time Monitoring"])
         
-        models_df = pd.DataFrame(models_data)
-        
-        # Format the dataframe
-        models_df["accuracy"] = models_df["accuracy"].apply(lambda x: f"{x:.2%}")
-        
-        # Color the status column
-        def color_status(val):
-            color = "green" if val == "Active" else "red"
-            return f'color: {color}'
-        
-        # Display the models table
-        st.dataframe(models_df.style.map(color_status, subset=["status"]), hide_index=True)
-        
-        # Model Performance Visualization
-        st.subheader("Model Performance Comparison")
-        
-        # Create bar chart for model accuracy
-        models_for_chart = models_df.copy()
-        models_for_chart["accuracy"] = models_data["accuracy"]  # Get original values for plotting
-        
-        fig = px.bar(
-            models_for_chart, 
-            x="model_id", 
-            y="accuracy", 
-            color="type",
-            text_auto='.2%',
-            title="Model Accuracy Comparison",
-            labels={"model_id": "Model", "accuracy": "Accuracy", "type": "Model Type"}
-        )
-        
-        fig.update_layout(
-            height=400,
-            xaxis_title="Model",
-            yaxis_title="Accuracy",
-            yaxis=dict(tickformat='.0%'),
-            template="plotly_dark"
-        )
-        
-        st.plotly_chart(fig, use_container_width=True)
-        
-        # Model Details Section - Show when a model is selected
-        st.subheader("Model Details")
-        
-        selected_model = st.selectbox(
-            "Select a model to view details",
-            options=models_df["model_id"].tolist()
-        )
-        
-        if selected_model:
-            # Get the selected model data
-            model_idx = models_df[models_df["model_id"] == selected_model].index[0]
-            model_type = models_df.loc[model_idx, "type"]
-            model_asset = models_df.loc[model_idx, "asset"]
-            model_timeframe = models_df.loc[model_idx, "timeframe"]
-            model_accuracy = models_df.loc[model_idx, "accuracy"]
-            model_status = models_df.loc[model_idx, "status"]
+        with tab1:
+            # Model management
+            st.subheader("Model Management")
             
-            # Display model details
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                st.markdown(f"**Type:** {model_type}")
-                st.markdown(f"**Asset:** {model_asset}")
-            
-            with col2:
-                st.markdown(f"**Timeframe:** {model_timeframe}")
-                st.markdown(f"**Accuracy:** {model_accuracy}")
-            
-            with col3:
-                st.markdown(f"**Status:** {model_status}")
-                st.markdown(f"**Created:** {models_df.loc[model_idx, 'created_at']}")
-            
-            # Model architecture visualization
-            st.subheader("Model Architecture")
-            
-            if model_type == "LSTM":
-                architecture = """
-                LSTM Model Architecture:
-                - Input Layer: 60 time steps, 15 features
-                - LSTM Layer 1: 64 units, dropout=0.2
-                - LSTM Layer 2: 32 units, dropout=0.2
-                - Dense Layer: 16 units, activation='relu'
-                - Output Layer: 1 unit, activation='linear'
-                """
-                st.code(architecture)
-            elif model_type == "XGBoost":
-                architecture = """
-                XGBoost Model Parameters:
-                - max_depth: 6
-                - learning_rate: 0.1
-                - n_estimators: 100
-                - subsample: 0.8
-                - colsample_bytree: 0.8
-                - objective: 'reg:squarederror'
-                """
-                st.code(architecture)
-            elif model_type == "Prophet":
-                architecture = """
-                Prophet Model Configuration:
-                - changepoint_prior_scale: 0.05
-                - seasonality_prior_scale: 10
-                - daily_seasonality: True
-                - weekly_seasonality: True
-                - yearly_seasonality: True
-                """
-                st.code(architecture)
-            elif model_type == "Ensemble":
-                architecture = """
-                Ensemble Model Configuration:
-                - Base Models: LSTM, XGBoost, Prophet
-                - Ensemble Method: Weighted Average
-                - Weights: [0.5, 0.3, 0.2]
-                """
-                st.code(architecture)
-            
-            # Model performance metrics
-            st.subheader("Performance Metrics")
-            
-            # Generate mock performance metrics
-            np.random.seed(42)
-            
-            metrics = {
-                "Metric": ["Accuracy", "Precision", "Recall", "F1 Score", "RMSE", "MAE"],
-                "Training": [
-                    round(0.7 + np.random.random() * 0.1, 3),
-                    round(0.65 + np.random.random() * 0.1, 3),
-                    round(0.6 + np.random.random() * 0.1, 3),
-                    round(0.62 + np.random.random() * 0.1, 3),
-                    round(np.random.random() * 0.1, 3),
-                    round(np.random.random() * 0.05, 3)
-                ],
-                "Validation": [
-                    round(0.65 + np.random.random() * 0.1, 3),
-                    round(0.6 + np.random.random() * 0.1, 3),
-                    round(0.55 + np.random.random() * 0.1, 3),
-                    round(0.57 + np.random.random() * 0.1, 3),
-                    round(0.1 + np.random.random() * 0.1, 3),
-                    round(0.05 + np.random.random() * 0.05, 3)
-                ],
-                "Test": [
-                    round(0.6 + np.random.random() * 0.1, 3),
-                    round(0.55 + np.random.random() * 0.1, 3),
-                    round(0.5 + np.random.random() * 0.1, 3),
-                    round(0.52 + np.random.random() * 0.1, 3),
-                    round(0.15 + np.random.random() * 0.1, 3),
-                    round(0.1 + np.random.random() * 0.05, 3)
-                ]
-            }
-            
-            metrics_df = pd.DataFrame(metrics)
-            st.dataframe(metrics_df, hide_index=True)
-            
-            # Feature importance plot for applicable models
-            if model_type in ["XGBoost", "Ensemble"]:
-                st.subheader("Feature Importance")
-                
-                # Mock feature importance data
-                features = ["close", "volume", "rsi_14", "macd", "bb_upper", "bb_lower", 
-                            "ema_9", "ema_21", "atr_14", "obv"]
-                importance = np.random.random(len(features))
-                importance = importance / importance.sum()  # Normalize
-                
-                # Sort by importance
-                idx = np.argsort(importance)
-                features = [features[i] for i in idx]
-                importance = [importance[i] for i in idx]
-                
-                # Create horizontal bar chart
-                fig = px.bar(
-                    x=importance,
-                    y=features,
-                    orientation='h',
-                    labels={"x": "Importance", "y": "Feature"},
-                    title="Feature Importance"
-                )
-                
-                fig.update_layout(
-                    height=400,
-                    yaxis=dict(autorange="reversed"),
-                    template="plotly_dark"
-                )
-                
-                st.plotly_chart(fig, use_container_width=True)
-            
-            # Model actions
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                if st.button("Deploy Model"):
-                    st.success(f"Model {selected_model} deployed successfully!")
-            
-            with col2:
-                if st.button("Export Model"):
-                    st.info("Model would be exported to file in a real implementation.")
-            
-            with col3:
-                if model_status == "Active":
-                    if st.button("Deactivate Model"):
-                        st.warning(f"Model {selected_model} deactivated!")
-                else:
-                    if st.button("Activate Model"):
-                        st.success(f"Model {selected_model} activated!")
-    
-    # Training tab
-    with tab2:
-        st.subheader("Train New Model")
-        
-        # Model configuration form
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            model_type = st.selectbox(
-                "Model Type",
-                options=["LSTM", "XGBoost", "Prophet", "Ensemble"]
-            )
-            
-            trading_pair = st.selectbox(
-                "Trading Pair",
-                options=config.get("pairs", ["BTC/USDT", "ETH/USDT"])
-            )
-        
-        with col2:
-            timeframe = st.selectbox(
-                "Timeframe",
-                options=["1m", "5m", "15m", "1h", "4h", "1d"],
-                index=3  # Default to 1h
-            )
-            
-            train_test_split = st.slider(
-                "Train/Test Split",
-                min_value=0.5,
-                max_value=0.9,
-                value=0.8,
-                step=0.05,
-                help="Proportion of data to use for training"
-            )
-        
-        # Advanced model parameters
-        with st.expander("Advanced Parameters", expanded=False):
-            if model_type == "LSTM":
-                st.number_input("Sequence Length", min_value=10, max_value=100, value=60)
-                st.number_input("LSTM Units (Layer 1)", min_value=16, max_value=128, value=64)
-                st.number_input("LSTM Units (Layer 2)", min_value=8, max_value=64, value=32)
-                st.slider("Dropout Rate", min_value=0.0, max_value=0.5, value=0.2, step=0.05)
-                st.number_input("Batch Size", min_value=8, max_value=256, value=64)
-                st.number_input("Epochs", min_value=10, max_value=500, value=100)
-            
-            elif model_type == "XGBoost":
-                st.number_input("Max Depth", min_value=3, max_value=10, value=6)
-                st.slider("Learning Rate", min_value=0.01, max_value=0.3, value=0.1, step=0.01)
-                st.number_input("Number of Estimators", min_value=50, max_value=500, value=100)
-                st.slider("Subsample", min_value=0.5, max_value=1.0, value=0.8, step=0.05)
-                st.slider("Column Sample by Tree", min_value=0.5, max_value=1.0, value=0.8, step=0.05)
-            
-            elif model_type == "Prophet":
-                st.slider("Changepoint Prior Scale", min_value=0.001, max_value=0.5, value=0.05, step=0.001)
-                st.slider("Seasonality Prior Scale", min_value=1.0, max_value=20.0, value=10.0, step=0.5)
-                st.checkbox("Daily Seasonality", value=True)
-                st.checkbox("Weekly Seasonality", value=True)
-                st.checkbox("Yearly Seasonality", value=True)
-            
-            elif model_type == "Ensemble":
-                st.checkbox("Include LSTM", value=True)
-                st.checkbox("Include XGBoost", value=True)
-                st.checkbox("Include Prophet", value=False)
-                st.multiselect("Features to Use", ["price", "volume", "rsi", "macd", "bollinger_bands", "ema", "atr", "obv"], 
-                              default=["price", "volume", "rsi", "macd"])
-        
-        # Feature selection
-        st.subheader("Feature Selection")
-        
-        # Technical indicators to include
-        indicators = st.multiselect(
-            "Select Technical Indicators",
-            options=["RSI", "MACD", "Bollinger Bands", "EMA", "SMA", "ATR", "OBV", "Stochastic", "CCI", "ADX"],
-            default=["RSI", "MACD", "Bollinger Bands", "EMA"]
-        )
-        
-        # Additional features
-        additional_features = st.multiselect(
-            "Additional Features",
-            options=["Volume", "Open Interest", "Funding Rate", "Market Sentiment", "Volatility"],
-            default=["Volume", "Volatility"]
-        )
-        
-        # Time range for training
-        st.subheader("Training Period")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            end_date = datetime.now().date()
-            start_date = end_date - timedelta(days=365)  # Default to 1 year of data
-            
-            start_date = st.date_input(
-                "Start Date",
-                value=start_date,
-                max_value=end_date - timedelta(days=30)  # Need at least 30 days of data
-            )
-        
-        with col2:
-            end_date = st.date_input(
-                "End Date",
-                value=end_date,
-                min_value=start_date + timedelta(days=30),
-                max_value=datetime.now().date()
-            )
-        
-        # Train button
-        if st.button("Train Model", type="primary"):
-            # In a real implementation, this would start the training process
-            with st.spinner("Training model... This may take several minutes."):
-                # Simulate training with a progress bar
-                progress_bar = st.progress(0)
-                
-                for i in range(100):
-                    # Update progress bar
-                    progress_bar.progress(i + 1)
-                    time.sleep(0.1)
-                
-                # Show completion message
-                st.success("Model trained successfully!")
-                
-                # Display mock training results
-                st.subheader("Training Results")
-                
-                # Training metrics
-                col1, col2, col3 = st.columns(3)
+            # Create new model
+            with st.expander("Create New Model"):
+                col1, col2 = st.columns(2)
                 
                 with col1:
-                    st.metric("Accuracy", "72.5%")
-                    st.metric("F1 Score", "0.68")
-                
+                    model_name = st.text_input("Model Name")
+                    description = st.text_area("Description")
+                    
                 with col2:
-                    st.metric("Precision", "0.70")
-                    st.metric("RMSE", "0.12")
+                    model_type = st.selectbox(
+                        "Model Type",
+                        ["Classification", "Regression", "Reinforcement Learning"]
+                    )
+                    strategy_type = st.selectbox(
+                        "Strategy Type",
+                        ["Mean Reversion", "Trend Following", "Breakout"]
+                    )
                 
-                with col3:
-                    st.metric("Recall", "0.65")
-                    st.metric("MAE", "0.08")
-                
-                # Training vs Validation Loss
-                st.subheader("Training Progress")
-                
-                # Generate mock training history
-                epochs = list(range(1, 101))
-                train_loss = [1.0 * (0.9 ** i) + 0.1 * np.random.random() for i in range(100)]
-                val_loss = [1.1 * (0.93 ** i) + 0.2 * np.random.random() for i in range(100)]
-                
-                # Plot training progress
-                fig = go.Figure()
-                
-                fig.add_trace(go.Scatter(
-                    x=epochs, 
-                    y=train_loss,
-                    mode='lines',
-                    name='Training Loss',
-                    line=dict(color='blue')
-                ))
-                
-                fig.add_trace(go.Scatter(
-                    x=epochs, 
-                    y=val_loss,
-                    mode='lines',
-                    name='Validation Loss',
-                    line=dict(color='red')
-                ))
-                
-                fig.update_layout(
-                    title='Training and Validation Loss',
-                    xaxis_title='Epoch',
-                    yaxis_title='Loss',
-                    template='plotly_dark',
-                    height=400,
-                    hovermode='x unified'
-                )
-                
-                st.plotly_chart(fig, use_container_width=True)
-                
-                # Model deployment options
-                st.subheader("Model Deployment")
+                # Model architecture
+                st.write("### Model Architecture")
                 
                 col1, col2 = st.columns(2)
                 
                 with col1:
-                    if st.button("Deploy New Model"):
-                        st.success("Model deployed and ready for use!")
-                
-                with col2:
-                    if st.button("Save Model Only"):
-                        st.info("Model saved but not deployed.")
-    
-    # Predictions tab
-    with tab3:
-        st.subheader("Price Predictions")
-        
-        # Model selection for predictions
-        models = models_data["model_id"]
-        selected_model = st.selectbox(
-            "Select Model for Predictions",
-            options=models,
-            key="prediction_model"
-        )
-        
-        # Trading pair selection
-        trading_pair = st.selectbox(
-            "Trading Pair",
-            options=config.get("pairs", ["BTC/USDT", "ETH/USDT"]),
-            key="prediction_pair"
-        )
-        
-        # Prediction timeframe
-        prediction_length = st.slider(
-            "Prediction Horizon",
-            min_value=1,
-            max_value=30,
-            value=7,
-            help="Number of periods to predict ahead"
-        )
-        
-        # Generate predictions button
-        if st.button("Generate Predictions", type="primary"):
-            with st.spinner("Generating predictions..."):
-                # Simulate processing time
-                time.sleep(2)
-                
-                # Show predictions
-                st.success("Predictions generated successfully!")
-                
-                # Generate mock prediction data
-                end_date = datetime.now()
-                start_date = end_date - timedelta(days=30)
-                
-                # Historical dates
-                historical_dates = pd.date_range(start=start_date, end=end_date, freq='d')
-                
-                # Future dates
-                future_dates = pd.date_range(start=end_date + timedelta(days=1), periods=prediction_length, freq='d')
-                
-                # Base price based on trading pair
-                if "BTC" in trading_pair:
-                    base_price = 45000
-                elif "ETH" in trading_pair:
-                    base_price = 3000
-                else:
-                    base_price = 100
-                
-                # Generate historical prices (random walk)
-                np.random.seed(42)
-                historical_prices = [base_price]
-                
-                for i in range(1, len(historical_dates)):
-                    change = np.random.normal(0, base_price * 0.02)
-                    new_price = max(0.1, historical_prices[-1] + change)
-                    historical_prices.append(new_price)
-                
-                # Generate predicted prices
-                predicted_prices = [historical_prices[-1]]
-                predicted_upper = [historical_prices[-1]]
-                predicted_lower = [historical_prices[-1]]
-                
-                for i in range(1, len(future_dates)):
-                    # Trend continuation with increasing uncertainty
-                    trend = (historical_prices[-1] - historical_prices[-5]) / 5 if len(historical_prices) >= 5 else 0
-                    change = trend + np.random.normal(0, base_price * 0.01 * (i ** 0.5))
-                    new_price = max(0.1, predicted_prices[-1] + change)
-                    predicted_prices.append(new_price)
+                    architecture = {}
+                    architecture['layers'] = st.multiselect(
+                        "Layer Types",
+                        ["Dense", "LSTM", "GRU", "Conv1D", "Dropout"],
+                        default=["Dense"]
+                    )
                     
-                    # Confidence intervals
-                    uncertainty = base_price * 0.01 * (i ** 0.7)
-                    predicted_upper.append(new_price + 2 * uncertainty)
-                    predicted_lower.append(max(0.1, new_price - 2 * uncertainty))
+                    architecture['units'] = st.number_input(
+                        "Units per Layer",
+                        min_value=8,
+                        max_value=512,
+                        value=64,
+                        step=8
+                    )
+                    
+                with col2:
+                    architecture['activation'] = st.selectbox(
+                        "Activation Function",
+                        ["relu", "tanh", "sigmoid", "softmax"]
+                    )
+                    
+                    architecture['optimizer'] = st.selectbox(
+                        "Optimizer",
+                        ["adam", "sgd", "rmsprop", "adagrad"]
+                    )
                 
-                # Create DataFrame
-                df_historical = pd.DataFrame({
-                    'date': historical_dates,
-                    'price': historical_prices,
-                    'type': 'historical'
-                })
+                # Training settings
+                st.write("### Training Settings")
                 
-                df_predicted = pd.DataFrame({
-                    'date': future_dates,
-                    'price': predicted_prices,
-                    'upper': predicted_upper,
-                    'lower': predicted_lower,
-                    'type': 'predicted'
-                })
+                col1, col2 = st.columns(2)
                 
-                # Plot predictions
-                fig = go.Figure()
+                with col1:
+                    training_params = {}
+                    training_params['batch_size'] = st.number_input(
+                        "Batch Size",
+                        min_value=16,
+                        max_value=256,
+                        value=32,
+                        step=16
+                    )
+                    
+                    training_params['epochs'] = st.number_input(
+                        "Epochs",
+                        min_value=10,
+                        max_value=1000,
+                        value=100,
+                        step=10
+                    )
+                    
+                with col2:
+                    training_params['learning_rate'] = st.number_input(
+                        "Learning Rate",
+                        min_value=0.0001,
+                        max_value=0.1,
+                        value=0.001,
+                        step=0.0001
+                    )
+                    
+                    training_params['validation_split'] = st.number_input(
+                        "Validation Split",
+                        min_value=0.1,
+                        max_value=0.3,
+                        value=0.2,
+                        step=0.05
+                    )
                 
-                # Historical prices
-                fig.add_trace(go.Scatter(
-                    x=df_historical['date'],
-                    y=df_historical['price'],
-                    mode='lines',
-                    name='Historical',
-                    line=dict(color='blue')
-                ))
+                # Advanced settings
+                with st.expander("Advanced Settings"):
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        training_params['early_stopping'] = st.checkbox("Enable Early Stopping", value=True)
+                        if training_params['early_stopping']:
+                            training_params['patience'] = st.number_input(
+                                "Early Stopping Patience",
+                                min_value=5,
+                                max_value=50,
+                                value=10,
+                                step=5
+                            )
+                        
+                        training_params['class_weight'] = st.selectbox(
+                            "Class Weight",
+                            ["balanced", "balanced_subsample", "None"]
+                        )
+                        
+                    with col2:
+                        training_params['cross_validation'] = st.checkbox("Enable Cross Validation", value=False)
+                        if training_params['cross_validation']:
+                            training_params['cv_folds'] = st.number_input(
+                                "Cross Validation Folds",
+                                min_value=2,
+                                max_value=10,
+                                value=5,
+                                step=1
+                            )
+                        
+                        training_params['random_state'] = st.number_input(
+                            "Random State",
+                            min_value=0,
+                            max_value=1000,
+                            value=42,
+                            step=1
+                        )
                 
-                # Predicted prices
-                fig.add_trace(go.Scatter(
-                    x=df_predicted['date'],
-                    y=df_predicted['price'],
-                    mode='lines',
-                    name='Prediction',
-                    line=dict(color='red')
-                ))
+                if st.button("Create Model", type="primary"):
+                    try:
+                        model_id = model_manager.create_model(
+                            name=model_name,
+                            description=description,
+                            model_type=model_type,
+                            strategy_type=strategy_type,
+                            architecture=architecture,
+                            training_params=training_params
+                        )
+                        st.success(f"Model created successfully! ID: {model_id}")
+                    except Exception as e:
+                        logger.error(f"Error creating model: {e}")
+                        st.error(f"An error occurred while creating the model: {str(e)}")
+            
+            # List models
+            st.write("### Models")
+            
+            # Add filters
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                status_filter = st.selectbox(
+                    "Status Filter",
+                    ["All", "Active", "Inactive", "Training", "Failed"],
+                    index=0
+                )
+            
+            with col2:
+                type_filter = st.selectbox(
+                    "Model Type Filter",
+                    ["All", "Classification", "Regression", "Reinforcement Learning"],
+                    index=0
+                )
+            
+            with col3:
+                date_filter = st.date_input(
+                    "Date Range",
+                    value=(datetime.now() - timedelta(days=30), datetime.now())
+                )
+            
+            models = get_models()
+            if models is None:
+                st.error("Failed to load models")
+                return
+            
+            # Filter models
+            filtered_models = models
+            if status_filter != "All":
+                filtered_models = [model for model in filtered_models if model['status'] == status_filter.lower()]
+            if type_filter != "All":
+                filtered_models = [model for model in filtered_models if model['model_type'] == type_filter]
+            filtered_models = [
+                model for model in filtered_models 
+                if datetime.strptime(model['created_at'], '%Y-%m-%d %H:%M:%S').date() >= date_filter[0]
+                and datetime.strptime(model['created_at'], '%Y-%m-%d %H:%M:%S').date() <= date_filter[1]
+            ]
+            
+            for model in filtered_models:
+                with st.expander(f"{model['name']} - {model['status']}"):
+                    col1, col2, col3 = st.columns(3)
+                    
+                    with col1:
+                        st.write("**Description:**")
+                        st.write(model['description'])
+                        
+                    with col2:
+                        st.write("**Architecture:**")
+                        for param, value in model['architecture'].items():
+                            st.write(f"- {param}: {value}")
+                            
+                    with col3:
+                        st.write("**Status:**")
+                        st.write(f"- Created: {model['created_at']}")
+                        st.write(f"- Status: {model['status']}")
+                        st.write(f"- Type: {model['model_type']}")
+                    
+                    # Model controls
+                    col1, col2, col3, col4 = st.columns(4)
+                    
+                    with col1:
+                        if model['status'] == 'training':
+                            if st.button("Stop", key=f"stop_{model['id']}"):
+                                try:
+                                    model_manager.stop_training(model['id'])
+                                    st.success("Training stopped successfully!")
+                                except Exception as e:
+                                    logger.error(f"Error stopping training: {e}")
+                                    st.error(f"An error occurred while stopping training: {str(e)}")
+                        else:
+                            if st.button("Train", key=f"train_{model['id']}"):
+                                try:
+                                    model_manager.train_model(model['id'])
+                                    st.success("Training started successfully!")
+                                except Exception as e:
+                                    logger.error(f"Error starting training: {e}")
+                                    st.error(f"An error occurred while starting training: {str(e)}")
+                    
+                    with col2:
+                        if st.button("View Results", key=f"results_{model['id']}"):
+                            st.session_state['selected_model'] = model['id']
+                            st.experimental_rerun()
+                    
+                    with col3:
+                        if st.button("Export", key=f"export_{model['id']}"):
+                            try:
+                                metrics = get_model_metrics(model['id'])
+                                if metrics:
+                                    df = pd.DataFrame(metrics)
+                                    csv = df.to_csv(index=False)
+                                    st.download_button(
+                                        "Download Metrics",
+                                        csv,
+                                        f"model_{model['id']}_metrics.csv",
+                                        "text/csv"
+                                    )
+                            except Exception as e:
+                                logger.error(f"Error exporting metrics: {e}")
+                                st.error(f"An error occurred while exporting metrics: {str(e)}")
+                    
+                    with col4:
+                        if st.button("Delete", key=f"delete_{model['id']}"):
+                            try:
+                                if model_manager.delete_model(model['id']):
+                                    st.success("Model deleted successfully!")
+                                    st.experimental_rerun()
+                                else:
+                                    st.error("Failed to delete model")
+                            except Exception as e:
+                                logger.error(f"Error deleting model: {e}")
+                                st.error(f"An error occurred while deleting the model: {str(e)}")
+        
+        with tab2:
+            # Performance analysis
+            st.subheader("Performance Analysis")
+            
+            # Get selected model
+            selected_model = st.session_state.get('selected_model')
+            if not selected_model:
+                st.info("Select a model to view its performance analysis")
+                return
+            
+            metrics = get_model_metrics(selected_model)
+            if metrics is None:
+                st.error("Failed to load model metrics")
+                return
+            
+            # Convert metrics to DataFrame
+            df_metrics = pd.DataFrame(metrics)
+            
+            # Performance metrics
+            st.write("### Performance Metrics")
+            
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                st.metric("Accuracy", f"{df_metrics['accuracy'].iloc[-1]:.2%}")
+                st.metric("Precision", f"{df_metrics['precision'].iloc[-1]:.2%}")
                 
-                # Confidence interval
-                fig.add_trace(go.Scatter(
-                    x=df_predicted['date'].tolist() + df_predicted['date'].tolist()[::-1],
-                    y=df_predicted['upper'].tolist() + df_predicted['lower'].tolist()[::-1],
-                    fill='toself',
-                    fillcolor='rgba(255, 0, 0, 0.2)',
-                    line=dict(color='rgba(255, 0, 0, 0)'),
-                    name='95% Confidence'
-                ))
+            with col2:
+                st.metric("Recall", f"{df_metrics['recall'].iloc[-1]:.2%}")
+                st.metric("F1 Score", f"{df_metrics['f1'].iloc[-1]:.2%}")
                 
-                # Update layout
-                fig.update_layout(
-                    title=f'{trading_pair} Price Prediction',
-                    xaxis_title='Date',
-                    yaxis_title='Price',
-                    template='plotly_dark',
-                    height=500,
-                    hovermode='x unified'
+            with col3:
+                st.metric("AUC", f"{df_metrics['auc'].iloc[-1]:.2%}")
+                st.metric("Training Time", f"{df_metrics['training_time'].iloc[-1]:.1f}s")
+                
+            with col4:
+                st.metric("Last Updated", df_metrics['timestamp'].iloc[-1])
+                st.metric("Total Updates", len(df_metrics))
+            
+            # Performance visualizations
+            st.write("### Performance Visualizations")
+            
+            # Learning curves
+            fig_learning = go.Figure()
+            
+            fig_learning.add_trace(go.Scatter(
+                x=df_metrics['epoch'],
+                y=df_metrics['accuracy'],
+                mode='lines',
+                name='Accuracy'
+            ))
+            
+            fig_learning.add_trace(go.Scatter(
+                x=df_metrics['epoch'],
+                y=df_metrics['val_accuracy'],
+                mode='lines',
+                name='Validation Accuracy'
+            ))
+            
+            fig_learning.update_layout(
+                title='Learning Curves',
+                xaxis_title='Epoch',
+                yaxis_title='Accuracy',
+                height=400
+            )
+            
+            st.plotly_chart(fig_learning, use_container_width=True)
+            
+            # Confusion matrix
+            if 'confusion_matrix' in df_metrics.columns:
+                fig_cm = px.imshow(
+                    df_metrics['confusion_matrix'].iloc[-1],
+                    title='Confusion Matrix',
+                    labels=dict(x="Predicted", y="Actual", color="Count")
                 )
                 
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig_cm, use_container_width=True)
+            
+            # Additional performance metrics
+            st.write("### Additional Metrics")
+            
+            # ROC curve
+            fig_roc = go.Figure()
+            
+            fig_roc.add_trace(go.Scatter(
+                x=df_metrics['fpr'].iloc[-1],
+                y=df_metrics['tpr'].iloc[-1],
+                mode='lines',
+                name='ROC Curve'
+            ))
+            
+            fig_roc.add_trace(go.Scatter(
+                x=[0, 1],
+                y=[0, 1],
+                mode='lines',
+                name='Random',
+                line=dict(dash='dash')
+            ))
+            
+            fig_roc.update_layout(
+                title='ROC Curve',
+                xaxis_title='False Positive Rate',
+                yaxis_title='True Positive Rate',
+                height=400
+            )
+            
+            st.plotly_chart(fig_roc, use_container_width=True)
+            
+            # Training time distribution
+            fig_time = px.histogram(
+                df_metrics,
+                x='training_time',
+                title='Training Time Distribution',
+                labels=dict(x='Training Time (s)', y='Count')
+            )
+            
+            st.plotly_chart(fig_time, use_container_width=True)
+        
+        with tab3:
+            # Feature analysis
+            st.subheader("Feature Analysis")
+            
+            if not selected_model:
+                st.info("Select a model to view feature analysis")
+                return
+            
+            # Get feature importance
+            feature_importance = get_feature_importance(selected_model)
+            if feature_importance is None:
+                st.error("Failed to load feature importance")
+                return
+            
+            # Feature importance visualization
+            st.write("### Feature Importance")
+            
+            fig_importance = px.bar(
+                x=list(feature_importance.keys()),
+                y=list(feature_importance.values()),
+                title='Feature Importance'
+            )
+            
+            st.plotly_chart(fig_importance, use_container_width=True)
+            
+            # Feature correlation
+            st.write("### Feature Correlation")
+            
+            feature_correlation = model_manager.get_feature_correlation(selected_model)
+            if feature_correlation is not None:
+                fig_corr = px.imshow(
+                    feature_correlation,
+                    title='Feature Correlation Heatmap',
+                    labels=dict(x="Feature", y="Feature", color="Correlation")
+                )
                 
-                # Prediction details
-                st.subheader("Prediction Details")
+                st.plotly_chart(fig_corr, use_container_width=True)
+            
+            # Feature distribution
+            st.write("### Feature Distribution")
+            
+            feature_distribution = model_manager.get_feature_distribution(selected_model)
+            if feature_distribution:
+                for feature, values in feature_distribution.items():
+                    fig_dist = px.histogram(
+                        x=values,
+                        title=f'{feature} Distribution',
+                        labels=dict(x=feature, y="Count")
+                    )
+                    
+                    st.plotly_chart(fig_dist, use_container_width=True)
+            
+            # Export feature analysis
+            if st.button("Export Feature Analysis"):
+                try:
+                    analysis_results = {
+                        'feature_importance': feature_importance,
+                        'feature_correlation': feature_correlation.tolist() if feature_correlation is not None else None,
+                        'feature_distribution': feature_distribution
+                    }
+                    
+                    json_results = pd.DataFrame(analysis_results).to_json()
+                    st.download_button(
+                        "Download Feature Analysis",
+                        json_results,
+                        f"model_{selected_model}_feature_analysis.json",
+                        "application/json"
+                    )
+                except Exception as e:
+                    logger.error(f"Error exporting feature analysis: {e}")
+                    st.error(f"An error occurred while exporting feature analysis: {str(e)}")
+        
+        with tab4:
+            # Real-time monitoring
+            st.subheader("Real-time Monitoring")
+            
+            if not selected_model:
+                st.info("Select a model to view real-time monitoring")
+                return
+            
+            # Get current model status
+            model = next((m for m in models if m['id'] == selected_model), None)
+            if not model:
+                st.error("Model not found")
+                return
+            
+            if model['status'] != 'active':
+                st.warning("Model is not currently active")
+                return
+            
+            # Real-time metrics
+            st.write("### Current Performance")
+            
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.metric(
+                    "Accuracy",
+                    f"{df_metrics['accuracy'].iloc[-1]:.2%}"
+                )
                 
-                # Create a table of predictions
-                prediction_table = pd.DataFrame({
-                    'Date': future_dates,
-                    'Predicted Price': [f"${p:.2f}" for p in predicted_prices],
-                    'Lower Bound': [f"${p:.2f}" for p in predicted_lower],
-                    'Upper Bound': [f"${p:.2f}" for p in predicted_upper],
-                    'Change (%)': [(predicted_prices[i] / historical_prices[-1] - 1) * 100 if i > 0 else 0 for i in range(len(predicted_prices))]
-                })
+            with col2:
+                st.metric(
+                    "Predictions Made",
+                    f"{len(get_recent_predictions(selected_model))}"
+                )
                 
-                # Format the change column
-                prediction_table['Change (%)'] = prediction_table['Change (%)'].apply(lambda x: f"{x:+.2f}%")
+            with col3:
+                st.metric(
+                    "Last Update",
+                    f"{datetime.now() - datetime.strptime(df_metrics['timestamp'].iloc[-1], '%Y-%m-%d %H:%M:%S'):.1f}m ago"
+                )
+            
+            # Real-time predictions
+            st.write("### Recent Predictions")
+            
+            predictions = get_recent_predictions(selected_model)
+            if predictions:
+                df_predictions = pd.DataFrame(predictions)
                 
-                st.dataframe(prediction_table, hide_index=True)
+                # Prediction accuracy over time
+                fig_pred = go.Figure()
                 
-                # Prediction confidence
-                direction = "UP" if predicted_prices[-1] > historical_prices[-1] else "DOWN"
-                confidence = np.random.uniform(0.6, 0.9)  # Random confidence between 60% and 90%
+                fig_pred.add_trace(go.Scatter(
+                    x=df_predictions['timestamp'],
+                    y=df_predictions['accuracy'],
+                    mode='lines',
+                    name='Prediction Accuracy'
+                ))
                 
-                st.info(f"Prediction Direction: {direction} with {confidence:.1%} confidence")
+                fig_pred.update_layout(
+                    title='Prediction Accuracy Over Time',
+                    xaxis_title='Time',
+                    yaxis_title='Accuracy',
+                    height=400
+                )
                 
-                # Trading recommendation
-                if direction == "UP" and confidence > 0.7:
-                    recommendation = "BUY"
-                    color = "green"
-                elif direction == "DOWN" and confidence > 0.7:
-                    recommendation = "SELL"
-                    color = "red"
-                else:
-                    recommendation = "HOLD"
-                    color = "orange"
+                st.plotly_chart(fig_pred, use_container_width=True)
                 
-                st.markdown(f"<h3 style='color: {color}'>Recommendation: {recommendation}</h3>", unsafe_allow_html=True)
-    
-    # Instructions
-    st.markdown("---")
-    st.caption("""
-    Note: This is a template with simulated data. In a real implementation, 
-    the models would use actual market data and machine learning algorithms.
-    """)
+                # Confidence distribution
+                fig_conf = px.histogram(
+                    df_predictions,
+                    x='confidence',
+                    title='Prediction Confidence Distribution',
+                    labels=dict(x='Confidence', y='Count')
+                )
+                
+                st.plotly_chart(fig_conf, use_container_width=True)
+            
+            # Auto-refresh
+            st.write("### Auto-refresh Settings")
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                auto_refresh = st.checkbox("Enable Auto-refresh", value=True)
+                
+            with col2:
+                if auto_refresh:
+                    refresh_interval = st.number_input(
+                        "Refresh Interval (seconds)",
+                        min_value=5,
+                        max_value=60,
+                        value=10,
+                        step=5
+                    )
+            
+            if auto_refresh:
+                st.write(f"Next refresh in {refresh_interval} seconds...")
+                time.sleep(refresh_interval)
+                st.experimental_rerun()
+        
+    except Exception as e:
+        logger.error(f"Error displaying ML Models page: {e}")
+        st.error(f"An error occurred while loading the ML Models page: {str(e)}")
 
 if __name__ == "__main__":
     # For testing the page individually
-    show({}) 
+    show() 

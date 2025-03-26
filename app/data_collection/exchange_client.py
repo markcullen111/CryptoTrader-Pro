@@ -6,6 +6,8 @@ import json
 from typing import Dict, List, Optional, Union, Any
 from datetime import datetime, timedelta
 import random
+import time
+from tenacity import retry, stop_after_attempt, wait_exponential
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +30,12 @@ class ExchangeClient:
         self.debug = debug
         self.client = None
         self.is_initialized = False
+        
+        # Rate limiting settings
+        self.rate_limits = {
+            'public': {'calls': 0, 'reset_time': 0},
+            'private': {'calls': 0, 'reset_time': 0}
+        }
         
         # Mock data for debug mode
         self.mock_balance = {
@@ -91,7 +99,13 @@ class ExchangeClient:
             self.client = exchange_class({
                 'apiKey': self.api_key,
                 'secret': self.api_secret,
-                'enableRateLimit': True
+                'enableRateLimit': True,
+                'timeout': 30000,  # 30 seconds timeout
+                'options': {
+                    'defaultType': 'spot',
+                    'adjustForTimeDifference': True,
+                    'recvWindow': 60000  # 60 seconds
+                }
             })
             
             # Test connection
@@ -118,6 +132,46 @@ class ExchangeClient:
         self.is_initialized = False
         return True
     
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
+    async def _make_request(self, method: str, endpoint: str, params: Dict = None, is_private: bool = False):
+        """
+        Make a rate-limited request to the exchange.
+        
+        Args:
+            method (str): HTTP method (GET, POST, etc.)
+            endpoint (str): API endpoint
+            params (Dict): Request parameters
+            is_private (bool): Whether this is a private API call
+            
+        Returns:
+            Any: Response from the exchange
+        """
+        try:
+            # Check rate limits
+            current_time = time.time()
+            rate_limit = self.rate_limits['private' if is_private else 'public']
+            
+            if current_time < rate_limit['reset_time']:
+                wait_time = rate_limit['reset_time'] - current_time
+                logger.warning(f"Rate limit reached. Waiting {wait_time:.2f} seconds")
+                await asyncio.sleep(wait_time)
+            
+            # Make the request
+            if is_private:
+                response = await getattr(self.client, method)(endpoint, params)
+            else:
+                response = await getattr(self.client, method)(endpoint, params)
+            
+            # Update rate limit counters
+            rate_limit['calls'] += 1
+            rate_limit['reset_time'] = current_time + 60  # Reset after 60 seconds
+            
+            return response
+            
+        except Exception as e:
+            logger.error(f"Error making request to {endpoint}: {e}")
+            raise
+    
     async def get_balance(self):
         """
         Get account balance.
@@ -133,7 +187,7 @@ class ExchangeClient:
             if not self.is_initialized:
                 await self.initialize()
             
-            balance = await self.client.fetch_balance()
+            balance = await self._make_request('fetch_balance', None, is_private=True)
             return balance
             
         except Exception as e:
@@ -160,7 +214,7 @@ class ExchangeClient:
             if not self.is_initialized:
                 await self.initialize()
             
-            ticker = await self.client.fetch_ticker(symbol)
+            ticker = await self._make_request('fetch_ticker', symbol)
             return ticker
             
         except Exception as e:
@@ -188,7 +242,7 @@ class ExchangeClient:
             if not self.is_initialized:
                 await self.initialize()
             
-            order_book = await self.client.fetch_order_book(symbol, limit)
+            order_book = await self._make_request('fetch_order_book', symbol, {'limit': limit})
             return order_book
             
         except Exception as e:
@@ -203,11 +257,11 @@ class ExchangeClient:
         
         Args:
             symbol (str): Trading symbol (e.g., 'BTC/USDT')
-            timeframe (str): Timeframe (e.g., '1h', '15m')
-            limit (int): Maximum number of candles to return
+            timeframe (str): Timeframe (e.g., '1h', '4h', '1d')
+            limit (int): Number of candles to return
         
         Returns:
-            list: OHLCV data
+            list: List of OHLCV data
         """
         try:
             if self.debug:
@@ -217,7 +271,13 @@ class ExchangeClient:
             if not self.is_initialized:
                 await self.initialize()
             
-            ohlcv = await self.client.fetch_ohlcv(symbol, timeframe, limit=limit)
+            # Convert timeframe to exchange format
+            timeframe = timeframe.upper().replace('H', 'h')  # Fix deprecation warning
+            
+            ohlcv = await self._make_request('fetch_ohlcv', symbol, {
+                'timeframe': timeframe,
+                'limit': limit
+            })
             return ohlcv
             
         except Exception as e:
@@ -377,10 +437,10 @@ class ExchangeClient:
         Get open orders.
         
         Args:
-            symbol (str, optional): Trading symbol (e.g., 'BTC/USDT')
+            symbol (str, optional): Trading symbol to filter orders
         
         Returns:
-            list: Open orders
+            list: List of open orders
         """
         try:
             if self.debug:
@@ -390,11 +450,12 @@ class ExchangeClient:
             if not self.is_initialized:
                 await self.initialize()
             
-            open_orders = await self.client.fetch_open_orders(symbol)
-            return open_orders
+            params = {'symbol': symbol} if symbol else None
+            orders = await self._make_request('fetch_open_orders', params, is_private=True)
+            return orders
             
         except Exception as e:
-            logger.error(f"Error getting open orders for {symbol}: {e}")
+            logger.error(f"Error getting open orders: {e}")
             if self.debug:
                 return self._get_mock_open_orders(symbol)
             return []

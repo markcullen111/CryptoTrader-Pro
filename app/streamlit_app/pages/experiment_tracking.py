@@ -1,365 +1,674 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
 import numpy as np
-import os
-import sys
+import plotly.graph_objects as go
+import plotly.express as px
 from datetime import datetime, timedelta
-import json
-from pathlib import Path
-import matplotlib.pyplot as plt
+import logging
+from app.ml.experiment_manager import ExperimentManager
+from app.ml.model_manager import ModelManager
+from app.trading.exchange_client import ExchangeClient
+import time
 
-# Use flexible import approach for the api module
-try:
-    # Try first as absolute import from app structure
-    from app.streamlit_app.api import *
-except ImportError:
+logger = logging.getLogger(__name__)
+
+@st.cache_resource(ttl=300)  # Cache for 5 minutes
+def get_experiment_manager():
+    """Get experiment manager instance."""
+    return ExperimentManager()
+
+@st.cache_resource(ttl=300)
+def get_model_manager():
+    """Get model manager instance."""
+    return ModelManager()
+
+@st.cache_resource(ttl=300)
+def get_exchange_client():
+    """Get exchange client instance."""
+    return ExchangeClient()
+
+@st.cache_data(ttl=300)
+def get_experiments():
+    """Get list of experiments."""
     try:
-        # Try as relative import
-        import sys
-        from pathlib import Path
-        
-        # Add parent directory to path
-        parent_dir = str(Path(__file__).parent.parent)
-        if parent_dir not in sys.path:
-            sys.path.insert(0, parent_dir)
-        
-        # Import API module
-        from api import *
-    except ImportError as e:
-        st.error(f"Error importing API module: {e}")
+        experiment_manager = get_experiment_manager()
+        return experiment_manager.get_experiments()
+    except Exception as e:
+        logger.error(f"Error getting experiments: {e}")
+        return None
+
+@st.cache_data(ttl=300)
+def get_experiment_results(experiment_id):
+    """Get experiment results."""
+    try:
+        experiment_manager = get_experiment_manager()
+        return experiment_manager.get_experiment_results(experiment_id)
+    except Exception as e:
+        logger.error(f"Error getting experiment results: {e}")
+        return None
+
+@st.cache_data(ttl=300)
+def get_parameter_combinations(experiment_id):
+    """Get parameter combinations for an experiment."""
+    try:
+        experiment_manager = get_experiment_manager()
+        return experiment_manager.get_parameter_combinations(experiment_id)
+    except Exception as e:
+        logger.error(f"Error getting parameter combinations: {e}")
+        return None
+
+@st.cache_data(ttl=60)
+def get_experiment_templates():
+    """Get available experiment templates."""
+    try:
+        experiment_manager = get_experiment_manager()
+        return experiment_manager.get_experiment_templates()
+    except Exception as e:
+        logger.error(f"Error getting experiment templates: {e}")
+        return None
 
 def show():
-    """Display the experiment tracking page."""
+    """Display the Experiment Tracking page."""
     st.title("Experiment Tracking")
     
-    # Check if the app is initialized
-    if not st.session_state.initialized:
-        st.warning("Please configure API credentials in Settings")
-        return
-    
-    # Add tabs for different sections
-    tab1, tab2, tab3 = st.tabs(["Experiments", "Model Performance", "Hyperparameter Analysis"])
-    
-    with tab1:
-        show_experiments_tab()
-    
-    with tab2:
-        show_model_performance_tab()
-    
-    with tab3:
-        show_hyperparameter_analysis_tab()
-
-def show_experiments_tab():
-    """Display the experiments tab."""
-    st.subheader("Experiments Overview")
-    
-    # Get MLflow experiments
-    experiments = get_mlflow_experiments()
-    
-    if not experiments:
-        st.info("No MLflow experiments found. Start training models to track experiments.")
-        return
-    
-    # Display experiment selector
-    experiment_names = [exp['name'] for exp in experiments]
-    selected_experiment = st.selectbox(
-        "Select Experiment",
-        experiment_names
-    )
-    
-    # Get selected experiment details
-    experiment = next((exp for exp in experiments if exp['name'] == selected_experiment), None)
-    
-    if experiment:
-        # Display experiment details
-        st.write(f"**Experiment ID:** {experiment['experiment_id']}")
-        st.write(f"**Artifact Location:** {experiment['artifact_location']}")
-        st.write(f"**Creation Time:** {experiment['creation_time']}")
+    try:
+        # Get experiment manager
+        experiment_manager = get_experiment_manager()
         
-        # Get runs for the selected experiment
-        runs = get_mlflow_runs(experiment['experiment_id'])
+        # Create tabs for different views
+        tab1, tab2, tab3, tab4 = st.tabs(["Experiments", "Performance Analysis", "Parameter Optimization", "Real-time Monitoring"])
         
-        if runs:
-            st.write(f"**Number of Runs:** {len(runs)}")
+        with tab1:
+            # Experiment management
+            st.subheader("Experiment Management")
             
-            # Create a dataframe for the runs
-            runs_data = []
-            for run in runs:
-                run_data = {
-                    'Run ID': run['run_id'],
-                    'Start Time': run['start_time'],
-                    'Status': run['status'],
-                    'Duration': run['duration']
-                }
-                
-                # Add metrics
-                if 'metrics' in run:
-                    for key, value in run['metrics'].items():
-                        run_data[f"Metric: {key}"] = value
-                
-                runs_data.append(run_data)
-            
-            runs_df = pd.DataFrame(runs_data)
-            
-            # Display runs table
-            st.write("### Runs")
-            st.dataframe(runs_df, use_container_width=True)
-            
-            # Allow selecting runs for comparison
-            selected_runs = st.multiselect(
-                "Select Runs to Compare",
-                runs_df['Run ID'].tolist()
-            )
-            
-            if selected_runs and len(selected_runs) > 1:
-                if st.button("Compare Selected Runs"):
-                    # Filter dataframe for selected runs
-                    selected_runs_df = runs_df[runs_df['Run ID'].isin(selected_runs)]
+            # Create new experiment
+            with st.expander("Create New Experiment"):
+                # Template selection
+                templates = get_experiment_templates()
+                if templates:
+                    template = st.selectbox(
+                        "Select Template",
+                        ["Custom"] + list(templates.keys()),
+                        index=0
+                    )
                     
-                    # Display comparison
-                    st.write("### Run Comparison")
-                    
-                    # Extract metrics columns
-                    metric_columns = [col for col in selected_runs_df.columns if col.startswith('Metric:')]
-                    
-                    if metric_columns:
-                        # Create a dataframe for metrics comparison
-                        metrics_comparison = selected_runs_df[['Run ID'] + metric_columns]
+                    if template != "Custom":
+                        template_config = templates[template]
+                        experiment_name = st.text_input("Experiment Name", value=f"{template}_experiment")
+                        description = st.text_area("Description", value=template_config.get('description', ''))
+                        model_type = st.selectbox("Model Type", [template_config['model_type']])
+                        strategy_type = st.selectbox("Strategy Type", [template_config['strategy_type']])
+                        param_ranges = template_config['param_ranges']
+                        training_params = template_config['training_params']
+                    else:
+                        # Original custom experiment creation form
+                        col1, col2 = st.columns(2)
                         
-                        # Display metrics comparison
-                        st.dataframe(metrics_comparison, use_container_width=True)
-                        
-                        # Create a bar chart for each metric
-                        for metric in metric_columns:
-                            metric_name = metric.replace('Metric: ', '')
+                        with col1:
+                            experiment_name = st.text_input("Experiment Name")
+                            description = st.text_area("Description")
                             
-                            fig = px.bar(
-                                metrics_comparison,
-                                x='Run ID',
-                                y=metric,
-                                title=f"{metric_name} Comparison"
+                        with col2:
+                            model_type = st.selectbox(
+                                "Model Type",
+                                ["Classification", "Regression", "Reinforcement Learning"]
+                            )
+                            strategy_type = st.selectbox(
+                                "Strategy Type",
+                                ["Mean Reversion", "Trend Following", "Breakout"]
+                            )
+                        
+                        # Parameter ranges
+                        st.write("### Parameter Ranges")
+                        
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
+                            param_ranges = {}
+                            param_ranges['learning_rate'] = st.slider(
+                                "Learning Rate",
+                                min_value=0.0001,
+                                max_value=0.1,
+                                value=(0.001, 0.01),
+                                step=0.0001
                             )
                             
-                            st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.info(f"No runs found for experiment '{selected_experiment}'")
-    else:
-        st.error(f"Could not find details for experiment '{selected_experiment}'")
-
-def show_model_performance_tab():
-    """Display the model performance tab."""
-    st.subheader("Model Performance Analysis")
-    
-    # Get MLflow experiments for model selection
-    experiments = get_mlflow_experiments()
-    
-    if not experiments:
-        st.info("No MLflow experiments found. Start training models to analyze performance.")
-        return
-    
-    # Display experiment selector
-    experiment_names = [exp['name'] for exp in experiments]
-    selected_experiment = st.selectbox(
-        "Select Experiment",
-        experiment_names,
-        key="model_performance_experiment"
-    )
-    
-    # Get runs for the selected experiment
-    experiment = next((exp for exp in experiments if exp['name'] == selected_experiment), None)
-    
-    if experiment:
-        runs = get_mlflow_runs(experiment['experiment_id'])
+                            param_ranges['batch_size'] = st.slider(
+                                "Batch Size",
+                                min_value=16,
+                                max_value=256,
+                                value=(32, 128),
+                                step=16
+                            )
+                            
+                        with col2:
+                            param_ranges['epochs'] = st.slider(
+                                "Epochs",
+                                min_value=10,
+                                max_value=1000,
+                                value=(50, 200),
+                                step=10
+                            )
+                            
+                            param_ranges['dropout_rate'] = st.slider(
+                                "Dropout Rate",
+                                min_value=0.0,
+                                max_value=0.5,
+                                value=(0.1, 0.3),
+                                step=0.05
+                            )
+                        
+                        # Training settings
+                        st.write("### Training Settings")
+                        
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
+                            training_params = {}
+                            training_params['validation_split'] = st.number_input(
+                                "Validation Split",
+                                min_value=0.1,
+                                max_value=0.3,
+                                value=0.2,
+                                step=0.05
+                            )
+                            
+                            training_params['early_stopping_patience'] = st.number_input(
+                                "Early Stopping Patience",
+                                min_value=5,
+                                max_value=50,
+                                value=10,
+                                step=5
+                            )
+                            
+                        with col2:
+                            training_params['max_trials'] = st.number_input(
+                                "Max Trials",
+                                min_value=10,
+                                max_value=1000,
+                                value=100,
+                                step=10
+                            )
+                            
+                            training_params['optimization_metric'] = st.selectbox(
+                                "Optimization Metric",
+                                ["accuracy", "precision", "recall", "f1", "auc"]
+                            )
+                
+                # Advanced settings
+                with st.expander("Advanced Settings"):
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        training_params['cross_validation'] = st.number_input(
+                            "Cross Validation Folds",
+                            min_value=2,
+                            max_value=10,
+                            value=5,
+                            step=1
+                        )
+                        
+                        training_params['class_weight'] = st.selectbox(
+                            "Class Weight",
+                            ["balanced", "balanced_subsample", "None"]
+                        )
+                        
+                    with col2:
+                        training_params['random_state'] = st.number_input(
+                            "Random State",
+                            min_value=0,
+                            max_value=1000,
+                            value=42,
+                            step=1
+                        )
+                        
+                        training_params['n_jobs'] = st.number_input(
+                            "Number of Jobs",
+                            min_value=1,
+                            max_value=8,
+                            value=4,
+                            step=1
+                        )
+                
+                # Save as template
+                save_as_template = st.checkbox("Save as Template")
+                if save_as_template:
+                    template_name = st.text_input("Template Name")
+                
+                if st.button("Create Experiment", type="primary"):
+                    try:
+                        experiment_id = experiment_manager.create_experiment(
+                            name=experiment_name,
+                            description=description,
+                            model_type=model_type,
+                            strategy_type=strategy_type,
+                            param_ranges=param_ranges,
+                            training_params=training_params
+                        )
+                        
+                        if save_as_template and template_name:
+                            experiment_manager.save_experiment_template(
+                                template_name,
+                                {
+                                    'description': description,
+                                    'model_type': model_type,
+                                    'strategy_type': strategy_type,
+                                    'param_ranges': param_ranges,
+                                    'training_params': training_params
+                                }
+                            )
+                        
+                        st.success(f"Experiment created successfully! ID: {experiment_id}")
+                    except Exception as e:
+                        logger.error(f"Error creating experiment: {e}")
+                        st.error(f"An error occurred while creating the experiment: {str(e)}")
+            
+            # List experiments
+            st.write("### Experiments")
+            
+            # Add filters
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                status_filter = st.selectbox(
+                    "Status Filter",
+                    ["All", "Running", "Completed", "Failed", "Stopped"],
+                    index=0
+                )
+            
+            with col2:
+                model_filter = st.selectbox(
+                    "Model Type Filter",
+                    ["All", "Classification", "Regression", "Reinforcement Learning"],
+                    index=0
+                )
+            
+            with col3:
+                date_filter = st.date_input(
+                    "Date Range",
+                    value=(datetime.now() - timedelta(days=30), datetime.now())
+                )
+            
+            experiments = get_experiments()
+            if experiments is None:
+                st.error("Failed to load experiments")
+                return
+            
+            # Filter experiments
+            filtered_experiments = experiments
+            if status_filter != "All":
+                filtered_experiments = [exp for exp in filtered_experiments if exp['status'] == status_filter.lower()]
+            if model_filter != "All":
+                filtered_experiments = [exp for exp in filtered_experiments if exp['model_type'] == model_filter]
+            filtered_experiments = [
+                exp for exp in filtered_experiments 
+                if datetime.strptime(exp['created_at'], '%Y-%m-%d %H:%M:%S').date() >= date_filter[0]
+                and datetime.strptime(exp['created_at'], '%Y-%m-%d %H:%M:%S').date() <= date_filter[1]
+            ]
+            
+            for exp in filtered_experiments:
+                with st.expander(f"{exp['name']} - {exp['status']}"):
+                    col1, col2, col3 = st.columns(3)
+                    
+                    with col1:
+                        st.write("**Description:**")
+                        st.write(exp['description'])
+                        
+                    with col2:
+                        st.write("**Parameters:**")
+                        for param, value in exp['param_ranges'].items():
+                            st.write(f"- {param}: {value}")
+                            
+                    with col3:
+                        st.write("**Status:**")
+                        st.write(f"- Created: {exp['created_at']}")
+                        st.write(f"- Status: {exp['status']}")
+                        st.write(f"- Trials: {exp['trials_completed']}/{exp['max_trials']}")
+                    
+                    # Experiment controls
+                    col1, col2, col3, col4 = st.columns(4)
+                    
+                    with col1:
+                        if exp['status'] == 'running':
+                            if st.button("Stop", key=f"stop_{exp['id']}"):
+                                try:
+                                    experiment_manager.stop_experiment(exp['id'])
+                                    st.success("Experiment stopped successfully!")
+                                except Exception as e:
+                                    logger.error(f"Error stopping experiment: {e}")
+                                    st.error(f"An error occurred while stopping the experiment: {str(e)}")
+                        else:
+                            if st.button("Start", key=f"start_{exp['id']}"):
+                                try:
+                                    experiment_manager.start_experiment(exp['id'])
+                                    st.success("Experiment started successfully!")
+                                except Exception as e:
+                                    logger.error(f"Error starting experiment: {e}")
+                                    st.error(f"An error occurred while starting the experiment: {str(e)}")
+                    
+                    with col2:
+                        if st.button("View Results", key=f"results_{exp['id']}"):
+                            st.session_state['selected_experiment'] = exp['id']
+                            st.experimental_rerun()
+                    
+                    with col3:
+                        if st.button("Export", key=f"export_{exp['id']}"):
+                            try:
+                                results = get_experiment_results(exp['id'])
+                                if results:
+                                    df = pd.DataFrame(results)
+                                    csv = df.to_csv(index=False)
+                                    st.download_button(
+                                        "Download Results",
+                                        csv,
+                                        f"experiment_{exp['id']}_results.csv",
+                                        "text/csv"
+                                    )
+                            except Exception as e:
+                                logger.error(f"Error exporting results: {e}")
+                                st.error(f"An error occurred while exporting results: {str(e)}")
+                    
+                    with col4:
+                        if st.button("Delete", key=f"delete_{exp['id']}"):
+                            try:
+                                if experiment_manager.delete_experiment(exp['id']):
+                                    st.success("Experiment deleted successfully!")
+                                    st.experimental_rerun()
+                                else:
+                                    st.error("Failed to delete experiment")
+                            except Exception as e:
+                                logger.error(f"Error deleting experiment: {e}")
+                                st.error(f"An error occurred while deleting the experiment: {str(e)}")
         
-        if runs:
-            # Create run selector
-            run_options = [f"{run['run_id']} ({run['start_time']})" for run in runs]
-            selected_run_option = st.selectbox(
-                "Select Run",
-                run_options
+        with tab2:
+            # Performance analysis
+            st.subheader("Performance Analysis")
+            
+            # Get selected experiment
+            selected_experiment = st.session_state.get('selected_experiment')
+            if not selected_experiment:
+                st.info("Select an experiment to view its performance analysis")
+                return
+            
+            results = get_experiment_results(selected_experiment)
+            if results is None:
+                st.error("Failed to load experiment results")
+                return
+            
+            # Convert results to DataFrame
+            df_results = pd.DataFrame(results)
+            
+            # Performance metrics
+            st.write("### Performance Metrics")
+            
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                st.metric("Best Accuracy", f"{df_results['accuracy'].max():.2%}")
+                st.metric("Best Precision", f"{df_results['precision'].max():.2%}")
+                
+            with col2:
+                st.metric("Best Recall", f"{df_results['recall'].max():.2%}")
+                st.metric("Best F1 Score", f"{df_results['f1'].max():.2%}")
+                
+            with col3:
+                st.metric("Best AUC", f"{df_results['auc'].max():.2%}")
+                st.metric("Avg Training Time", f"{df_results['training_time'].mean():.1f}s")
+                
+            with col4:
+                st.metric("Best Trial", f"#{df_results['trial_number'].iloc[df_results['accuracy'].argmax()]}")
+                st.metric("Completed Trials", len(df_results))
+            
+            # Performance visualizations
+            st.write("### Performance Visualizations")
+            
+            # Learning curves
+            fig_learning = go.Figure()
+            
+            for trial in df_results['trial_number'].unique():
+                trial_data = df_results[df_results['trial_number'] == trial]
+                fig_learning.add_trace(go.Scatter(
+                    x=trial_data['epoch'],
+                    y=trial_data['accuracy'],
+                    mode='lines',
+                    name=f'Trial {trial}'
+                ))
+            
+            fig_learning.update_layout(
+                title='Learning Curves by Trial',
+                xaxis_title='Epoch',
+                yaxis_title='Accuracy',
+                height=400
             )
             
-            # Extract run ID from selection
-            selected_run_id = selected_run_option.split(' ')[0]
-            selected_run = next((run for run in runs if run['run_id'] == selected_run_id), None)
+            st.plotly_chart(fig_learning, use_container_width=True)
             
-            if selected_run:
-                # Display run details
-                st.write(f"**Run ID:** {selected_run['run_id']}")
-                st.write(f"**Start Time:** {selected_run['start_time']}")
-                st.write(f"**Status:** {selected_run['status']}")
-                st.write(f"**Duration:** {selected_run['duration']}")
+            # Parameter importance
+            param_importance = experiment_manager.get_parameter_importance(selected_experiment)
+            if param_importance:
+                fig_importance = px.bar(
+                    x=list(param_importance.keys()),
+                    y=list(param_importance.values()),
+                    title='Parameter Importance'
+                )
                 
-                # Display metrics
-                if 'metrics' in selected_run and selected_run['metrics']:
-                    st.write("### Metrics")
-                    
-                    metrics_df = pd.DataFrame(
-                        list(selected_run['metrics'].items()),
-                        columns=['Metric', 'Value']
+                st.plotly_chart(fig_importance, use_container_width=True)
+            
+            # Confusion matrix
+            best_trial = df_results.loc[df_results['accuracy'].idxmax()]
+            if 'confusion_matrix' in best_trial:
+                fig_cm = px.imshow(
+                    best_trial['confusion_matrix'],
+                    title='Confusion Matrix (Best Trial)',
+                    labels=dict(x="Predicted", y="Actual", color="Count")
+                )
+                
+                st.plotly_chart(fig_cm, use_container_width=True)
+            
+            # Additional performance metrics
+            st.write("### Additional Metrics")
+            
+            # ROC curves for all trials
+            fig_roc = go.Figure()
+            
+            for trial in df_results['trial_number'].unique():
+                trial_data = df_results[df_results['trial_number'] == trial]
+                fig_roc.add_trace(go.Scatter(
+                    x=trial_data['fpr'],
+                    y=trial_data['tpr'],
+                    mode='lines',
+                    name=f'Trial {trial}'
+                ))
+            
+            fig_roc.add_trace(go.Scatter(
+                x=[0, 1],
+                y=[0, 1],
+                mode='lines',
+                name='Random',
+                line=dict(dash='dash')
+            ))
+            
+            fig_roc.update_layout(
+                title='ROC Curves by Trial',
+                xaxis_title='False Positive Rate',
+                yaxis_title='True Positive Rate',
+                height=400
+            )
+            
+            st.plotly_chart(fig_roc, use_container_width=True)
+            
+            # Training time distribution
+            fig_time = px.histogram(
+                df_results,
+                x='training_time',
+                title='Training Time Distribution',
+                labels=dict(x='Training Time (s)', y='Count')
+            )
+            
+            st.plotly_chart(fig_time, use_container_width=True)
+        
+        with tab3:
+            # Parameter optimization
+            st.subheader("Parameter Optimization")
+            
+            if not selected_experiment:
+                st.info("Select an experiment to view parameter optimization")
+                return
+            
+            # Get parameter combinations
+            param_combinations = get_parameter_combinations(selected_experiment)
+            if param_combinations is None:
+                st.error("Failed to load parameter combinations")
+                return
+            
+            # Parameter optimization visualization
+            st.write("### Parameter Optimization")
+            
+            # Parameter correlation heatmap
+            param_correlation = experiment_manager.get_parameter_correlation(selected_experiment)
+            if param_correlation is not None:
+                fig_corr = px.imshow(
+                    param_correlation,
+                    title='Parameter Correlation Heatmap',
+                    labels=dict(x="Parameter", y="Parameter", color="Correlation")
+                )
+                
+                st.plotly_chart(fig_corr, use_container_width=True)
+            
+            # Parameter distribution
+            param_distribution = experiment_manager.get_parameter_distribution(selected_experiment)
+            if param_distribution:
+                for param, values in param_distribution.items():
+                    fig_dist = px.histogram(
+                        x=values,
+                        title=f'{param} Distribution',
+                        labels=dict(x=param, y="Count")
                     )
                     
-                    st.dataframe(metrics_df, use_container_width=True)
+                    st.plotly_chart(fig_dist, use_container_width=True)
+            
+            # Best parameters
+            st.write("### Best Parameters")
+            
+            best_params = experiment_manager.get_best_parameters(selected_experiment)
+            if best_params:
+                for param, value in best_params.items():
+                    st.write(f"- **{param}:** {value}")
+            
+            # Export optimization results
+            if st.button("Export Optimization Results"):
+                try:
+                    optimization_results = {
+                        'best_parameters': best_params,
+                        'parameter_importance': param_importance,
+                        'parameter_correlation': param_correlation.tolist() if param_correlation is not None else None,
+                        'parameter_distribution': param_distribution
+                    }
                     
-                    # Create metrics visualization
-                    fig = px.bar(
-                        metrics_df,
-                        x='Metric',
-                        y='Value',
-                        title="Model Metrics"
+                    json_results = pd.DataFrame(optimization_results).to_json()
+                    st.download_button(
+                        "Download Optimization Results",
+                        json_results,
+                        f"experiment_{selected_experiment}_optimization.json",
+                        "application/json"
                     )
-                    
-                    st.plotly_chart(fig, use_container_width=True)
-                
-                # Display backtest results if available
-                if 'artifacts' in selected_run and 'backtest_results' in selected_run['artifacts']:
-                    st.write("### Backtest Results")
-                    
-                    backtest_results = selected_run['artifacts']['backtest_results']
-                    
-                    # Display equity curve if available
-                    if 'equity_curve' in backtest_results:
-                        st.write("#### Equity Curve")
-                        equity_curve = pd.DataFrame(backtest_results['equity_curve'])
-                        
-                        fig = px.line(
-                            equity_curve,
-                            x='date',
-                            y='equity',
-                            title="Equity Curve"
-                        )
-                        
-                        st.plotly_chart(fig, use_container_width=True)
-                    
-                    # Display trade analysis if available
-                    if 'trades' in backtest_results:
-                        st.write("#### Trade Analysis")
-                        trades = pd.DataFrame(backtest_results['trades'])
-                        
-                        st.dataframe(trades, use_container_width=True)
-                        
-                        # Create trade analysis visualizations
-                        fig = px.histogram(
-                            trades,
-                            x='profit_pct',
-                            title="Trade Profit Distribution",
-                            nbins=20
-                        )
-                        
-                        st.plotly_chart(fig, use_container_width=True)
-                else:
-                    st.info("No backtest results found for this run")
-            else:
-                st.error(f"Could not find details for run '{selected_run_id}'")
-        else:
-            st.info(f"No runs found for experiment '{selected_experiment}'")
-    else:
-        st.error(f"Could not find details for experiment '{selected_experiment}'")
-
-def show_hyperparameter_analysis_tab():
-    """Display the hyperparameter analysis tab."""
-    st.subheader("Hyperparameter Analysis")
-    
-    # Get MLflow experiments
-    experiments = get_mlflow_experiments()
-    
-    if not experiments:
-        st.info("No MLflow experiments found. Start training models to analyze hyperparameters.")
-        return
-    
-    # Display experiment selector
-    experiment_names = [exp['name'] for exp in experiments]
-    selected_experiment = st.selectbox(
-        "Select Experiment",
-        experiment_names,
-        key="hyperparameter_experiment"
-    )
-    
-    # Get selected experiment
-    experiment = next((exp for exp in experiments if exp['name'] == selected_experiment), None)
-    
-    if experiment:
-        # Get runs for the selected experiment
-        runs = get_mlflow_runs(experiment['experiment_id'])
+                except Exception as e:
+                    logger.error(f"Error exporting optimization results: {e}")
+                    st.error(f"An error occurred while exporting optimization results: {str(e)}")
         
-        if runs:
-            # Collect all parameters and metrics across runs
-            all_params = set()
-            all_metrics = set()
+        with tab4:
+            # Real-time monitoring
+            st.subheader("Real-time Monitoring")
             
-            for run in runs:
-                if 'params' in run:
-                    all_params.update(run['params'].keys())
-                if 'metrics' in run:
-                    all_metrics.update(run['metrics'].keys())
+            if not selected_experiment:
+                st.info("Select an experiment to view real-time monitoring")
+                return
             
-            # Create parameter and metric selectors
-            selected_param = st.selectbox(
-                "Select Parameter",
-                list(all_params)
+            # Get current experiment status
+            experiment = next((exp for exp in experiments if exp['id'] == selected_experiment), None)
+            if not experiment:
+                st.error("Experiment not found")
+                return
+            
+            if experiment['status'] != 'running':
+                st.warning("Experiment is not currently running")
+                return
+            
+            # Real-time metrics
+            st.write("### Current Progress")
+            
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.metric(
+                    "Trials Completed",
+                    f"{experiment['trials_completed']}/{experiment['max_trials']}",
+                    f"{experiment['trials_completed']/experiment['max_trials']*100:.1f}%"
+                )
+                
+            with col2:
+                st.metric(
+                    "Best Accuracy",
+                    f"{df_results['accuracy'].max():.2%}"
+                )
+                
+            with col3:
+                st.metric(
+                    "Time Elapsed",
+                    f"{datetime.now() - datetime.strptime(experiment['created_at'], '%Y-%m-%d %H:%M:%S'):.1f}h"
+                )
+            
+            # Real-time learning curves
+            st.write("### Real-time Learning Curves")
+            
+            fig_rt = go.Figure()
+            
+            for trial in df_results['trial_number'].unique():
+                trial_data = df_results[df_results['trial_number'] == trial]
+                fig_rt.add_trace(go.Scatter(
+                    x=trial_data['epoch'],
+                    y=trial_data['accuracy'],
+                    mode='lines',
+                    name=f'Trial {trial}'
+                ))
+            
+            fig_rt.update_layout(
+                title='Real-time Learning Curves',
+                xaxis_title='Epoch',
+                yaxis_title='Accuracy',
+                height=400
             )
             
-            selected_metric = st.selectbox(
-                "Select Metric",
-                list(all_metrics)
-            )
+            st.plotly_chart(fig_rt, use_container_width=True)
             
-            if selected_param and selected_metric:
-                # Extract parameter and metric values for each run
-                param_metric_data = []
+            # Auto-refresh
+            st.write("### Auto-refresh Settings")
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                auto_refresh = st.checkbox("Enable Auto-refresh", value=True)
                 
-                for run in runs:
-                    if 'params' in run and selected_param in run['params'] and 'metrics' in run and selected_metric in run['metrics']:
-                        param_value = run['params'][selected_param]
-                        metric_value = run['metrics'][selected_metric]
-                        
-                        # Try to convert parameter to numeric if possible
-                        try:
-                            param_value = float(param_value)
-                        except ValueError:
-                            pass
-                        
-                        param_metric_data.append({
-                            'run_id': run['run_id'],
-                            'parameter': param_value,
-                            'metric': metric_value
-                        })
-                
-                if param_metric_data:
-                    # Create dataframe
-                    param_metric_df = pd.DataFrame(param_metric_data)
-                    
-                    # Create scatter plot
-                    # Check if parameter values are numeric
-                    if pd.api.types.is_numeric_dtype(param_metric_df['parameter']):
-                        fig = px.scatter(
-                            param_metric_df,
-                            x='parameter',
-                            y='metric',
-                            title=f"{selected_metric} vs {selected_param}",
-                            hover_data=['run_id']
-                        )
-                        
-                        st.plotly_chart(fig, use_container_width=True)
-                    else:
-                        # For categorical parameters, use a box plot
-                        fig = px.box(
-                            param_metric_df,
-                            x='parameter',
-                            y='metric',
-                            title=f"{selected_metric} vs {selected_param}",
-                            points='all'
-                        )
-                        
-                        st.plotly_chart(fig, use_container_width=True)
-                    
-                    # Display data table
-                    st.dataframe(param_metric_df, use_container_width=True)
-                else:
-                    st.info(f"No runs found with both parameter '{selected_param}' and metric '{selected_metric}'")
-        else:
-            st.info(f"No runs found for experiment '{selected_experiment}'")
-    else:
-        st.error(f"Could not find details for experiment '{selected_experiment}'") 
+            with col2:
+                if auto_refresh:
+                    refresh_interval = st.number_input(
+                        "Refresh Interval (seconds)",
+                        min_value=5,
+                        max_value=60,
+                        value=10,
+                        step=5
+                    )
+            
+            if auto_refresh:
+                st.write(f"Next refresh in {refresh_interval} seconds...")
+                time.sleep(refresh_interval)
+                st.experimental_rerun()
+        
+    except Exception as e:
+        logger.error(f"Error displaying Experiment Tracking page: {e}")
+        st.error(f"An error occurred while loading the Experiment Tracking page: {str(e)}")
+
+if __name__ == "__main__":
+    # For testing the page individually
+    show() 

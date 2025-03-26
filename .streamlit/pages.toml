@@ -1,0 +1,19 @@
+[[pages]]
+path = "app/streamlit_app/pages/dashboard.py"
+name = "Dashboard"
+
+[[pages]]
+path = "app/streamlit_app/pages/trading.py"
+name = "Trading"
+
+[[pages]]
+path = "app/streamlit_app/pages/backtesting.py"
+name = "Backtesting"
+
+[[pages]]
+path = "app/streamlit_app/pages/ml_models.py"
+name = "ML Models"
+
+[[pages]]
+path = "app/streamlit_app/pages/performance.py"
+name = "Performance" 
