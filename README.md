@@ -19,6 +19,83 @@ An advanced cryptocurrency trading platform built with Python, featuring AI-powe
 
 - Python 3.8 or later
 - Git
+- A Binance account with API access
+
+### API Setup
+
+1. Create a Binance account if you don't have one:
+   - Go to [Binance.com](https://www.binance.com)
+   - Complete the registration and verification process
+
+2. Generate API Keys:
+   - Log into your Binance account
+   - Go to "API Management" in your account settings
+   - Click "Create API"
+   - Set the following permissions:
+     - ✅ Enable Reading
+     - ✅ Enable Spot & Margin Trading
+     - ❌ Disable Withdrawals
+   - Save your API Key and Secret Key securely
+
+3. Configure API Keys:
+   After running the setup script, edit the `.env` file:
+   ```bash
+   EXCHANGE_API_KEY=your_binance_api_key_here
+   EXCHANGE_API_SECRET=your_binance_secret_key_here
+   ```
+
+### Database Setup
+
+The application uses SQLite by default for data storage. For production use, you can configure PostgreSQL:
+
+1. Install PostgreSQL:
+   ```bash
+   # Ubuntu/Debian
+   sudo apt-get update
+   sudo apt-get install postgresql postgresql-contrib
+
+   # Windows
+   # Download and install from https://www.postgresql.org/download/windows/
+   ```
+
+2. Create a database:
+   ```bash
+   sudo -u postgres psql
+   CREATE DATABASE cryptotrader;
+   CREATE USER cryptotrader WITH PASSWORD 'your_secure_password';
+   GRANT ALL PRIVILEGES ON DATABASE cryptotrader TO cryptotrader;
+   \q
+   ```
+
+3. Configure database connection:
+   Edit `config/config.yaml`:
+   ```yaml
+   database:
+     type: postgresql  # or sqlite
+     host: localhost
+     port: 5432
+     name: cryptotrader
+     user: cryptotrader
+     password: your_secure_password
+   ```
+
+### Data Storage
+
+The application creates several directories for data management:
+
+- `data/`: Main data storage directory
+  - `market_data/`: Historical price data
+  - `models/`: Trained ML models
+  - `backtest/`: Backtesting results
+  - `experiments/`: Experiment tracking data
+
+### Security Notes
+
+1. Never commit your `.env` file or `config.yaml` with real credentials
+2. Use strong passwords for database access
+3. Regularly rotate your API keys
+4. Monitor your API key usage in your Binance account
+5. Consider using environment variables instead of config files in production
 
 ### Installation
 
