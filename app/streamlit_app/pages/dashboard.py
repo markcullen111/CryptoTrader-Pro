@@ -11,9 +11,11 @@ from app.data_collection.exchange_client import ExchangeClient
 from app.data_collection.market_data import MarketDataManager
 from app.trading.exchange_client import ExchangeClient as TradingExchangeClient
 from app.config.config_manager import ConfigManager
+from app.utils.logger import setup_logger
+from app.analytics.performance_analytics import PerformanceAnalytics
 
 # Get logger
-logger = logging.getLogger(__name__)
+logger = setup_logger(__name__)
 
 @st.cache_data(ttl=300)  # Cache for 5 minutes
 def calculate_indicators(df):
