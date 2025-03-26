@@ -39,7 +39,7 @@ async def get_market_data():
         st.error(f"Error fetching market data: {str(e)}")
         return None
 
-def display_trading_page():
+async def display_trading_page():
     """Display the trading page."""
     try:
         st.title("Trading Dashboard")
@@ -63,7 +63,7 @@ def display_trading_page():
         
         with col1:
             st.subheader("Market Data")
-            market_data = asyncio.run(get_market_data())
+            market_data = await get_market_data()
             if market_data:
                 st.write("Current Market Prices:")
                 for symbol, price in market_data['prices'].items():
@@ -93,4 +93,4 @@ def display_trading_page():
         st.error("An error occurred while loading the trading page. Please try again later.")
 
 if __name__ == "__main__":
-    display_trading_page() 
+    asyncio.run(display_trading_page()) 
