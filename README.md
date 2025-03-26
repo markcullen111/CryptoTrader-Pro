@@ -111,11 +111,84 @@ CryptoTrader-Pro/
 ├── setup_linux.sh         # Linux setup script
 ├── setup_windows.bat      # Windows setup script
 ├── run.sh                 # Linux run script
-├── run.sh                 # Windows run script
+├── run.bat                # Windows run script
 └── requirements.txt       # Python dependencies
 ```
 
 ## Development
+
+### Git Workflow
+
+We follow a structured Git workflow to maintain code quality and collaboration:
+
+#### Branch Strategy
+
+- `main`: Production-ready code
+- `develop`: Main development branch
+- `feature/*`: New features
+- `bugfix/*`: Bug fixes
+- `hotfix/*`: Urgent production fixes
+- `release/*`: Release preparation
+- `streamlit_cloud_deploy`: Streamlit Cloud deployment
+
+#### Commit Conventions
+
+We follow the [Conventional Commits](https://www.conventionalcommits.org/) specification:
+
+```
+<type>(<scope>): <description>
+
+[optional body]
+
+[optional footer(s)]
+```
+
+Types:
+- `feat`: New feature
+- `fix`: Bug fix
+- `docs`: Documentation changes
+- `style`: Code style changes (formatting, etc.)
+- `refactor`: Code refactoring
+- `perf`: Performance improvements
+- `test`: Adding or modifying tests
+- `chore`: Maintenance tasks
+
+Examples:
+```bash
+git commit -m "feat(trading): add real-time price alerts"
+git commit -m "fix(dashboard): resolve data refresh issue"
+git commit -m "docs: update installation instructions"
+```
+
+#### Development Workflow
+
+1. Create a new branch:
+   ```bash
+   git checkout -b feature/your-feature-name
+   ```
+
+2. Make your changes and commit:
+   ```bash
+   git add .
+   git commit -m "feat(scope): description"
+   ```
+
+3. Keep your branch updated:
+   ```bash
+   git fetch origin
+   git rebase origin/develop
+   ```
+
+4. Push your changes:
+   ```bash
+   git push origin feature/your-feature-name
+   ```
+
+5. Create a Pull Request:
+   - Use the PR template
+   - Link related issues
+   - Request reviews
+   - Ensure CI passes
 
 ### Running Tests
 
@@ -126,9 +199,9 @@ pytest tests/
 ### Contributing
 
 1. Fork the repository
-2. Create a feature branch
-3. Commit your changes
-4. Push to the branch
+2. Create a feature branch following the branch naming convention
+3. Make your changes following the commit conventions
+4. Push to your fork
 5. Create a Pull Request
 
 ## License
@@ -141,4 +214,11 @@ This software is for educational purposes only. Use at your own risk. The author
 
 ## Support
 
-For support, please open an issue in the GitHub repository or contact the maintainers. 
+For support, please:
+1. Check the [Documentation](docs/)
+2. Search existing [Issues](https://github.com/markcullen111/CryptoTrader-Pro/issues)
+3. Open a new issue with:
+   - Clear description
+   - Steps to reproduce
+   - Expected vs actual behavior
+   - System information 
