@@ -173,7 +173,7 @@ async def get_multiple_market_data(symbols=['BTC/USDT', 'ETH/USDT', 'BNB/USDT', 
             ohlcv = await exchange_client.get_ohlcv(symbol, timeframe, limit)
             if ohlcv:
                 df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
-                df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+                df['timestamp'] = pd.to_datetime(df['timestamp'], unit='h')
                 df.set_index('timestamp', inplace=True)
                 data_dict[symbol] = df['close']
         

@@ -5,6 +5,7 @@ from app.utils.logger import setup_logger
 from app.trading.exchange_client import ExchangeClient
 from app.trading.strategy_manager import StrategyManager
 from app.analytics.performance_analytics import PerformanceAnalytics
+from datetime import datetime
 
 logger = setup_logger(__name__)
 
@@ -23,23 +24,19 @@ def get_performance_analytics():
     """Get or create performance analytics instance."""
     return PerformanceAnalytics()
 
-@st.cache_data(ttl=60)  # Cache for 1 minute
-def get_market_data(symbol: str, timeframe: str):
-    """Get market data for the specified symbol and timeframe."""
+@st.cache_data
+async def get_market_data():
     try:
-        exchange_client = get_exchange_client()
-        # Run the async function in a new event loop
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        data = loop.run_until_complete(exchange_client.get_ohlcv(symbol, timeframe))
-        loop.close()
-        
-        # Convert to DataFrame for serialization
-        if data is not None:
-            return pd.DataFrame(data).to_dict(orient='records')
-        return None
+        exchange_client = ExchangeClient()
+        data = await exchange_client.get_market_data()
+        # Convert to serializable format
+        return {
+            'symbols': list(data.keys()),
+            'prices': {symbol: float(price) for symbol, price in data.items()},
+            'timestamp': datetime.now().isoformat()
+        }
     except Exception as e:
-        logger.error(f"Error fetching market data: {str(e)}")
+        st.error(f"Error fetching market data: {str(e)}")
         return None
 
 def display_trading_page():
@@ -66,10 +63,11 @@ def display_trading_page():
         
         with col1:
             st.subheader("Market Data")
-            market_data = get_market_data(symbol, timeframe)
-            if market_data is not None:
-                df = pd.DataFrame(market_data)
-                st.line_chart(df)
+            market_data = asyncio.run(get_market_data())
+            if market_data:
+                st.write("Current Market Prices:")
+                for symbol, price in market_data['prices'].items():
+                    st.write(f"{symbol}: ${price:,.2f}")
             else:
                 st.error("Failed to fetch market data")
         
