@@ -5,72 +5,50 @@ import colorlog
 from pathlib import Path
 from datetime import datetime
 import sys
+from logging.handlers import RotatingFileHandler
 
-def setup_logger(name, level=None, log_file=None, log_to_console=True, log_format=None):
-    """
-    Set up a logger with the specified configuration.
+def setup_logger(name: str, log_dir: str = "logs") -> logging.Logger:
+    """Set up a logger with both file and console handlers.
     
     Args:
-        name (str): Logger name
-        level (int, optional): Logging level. If None, it will use INFO level.
-        log_file (str, optional): Path to log file. If None, no file logging will be used.
-        log_to_console (bool, optional): Whether to log to console. Default is True.
-        log_format (str, optional): Log format. If None, a default format will be used.
+        name: The name of the logger
+        log_dir: Directory to store log files
         
     Returns:
-        logging.Logger: Configured logger
+        logging.Logger: Configured logger instance
     """
+    # Create logs directory if it doesn't exist
+    Path(log_dir).mkdir(parents=True, exist_ok=True)
+    
     # Create logger
     logger = logging.getLogger(name)
+    logger.setLevel(logging.INFO)
     
-    # Remove existing handlers
-    for handler in logger.handlers[:]:
-        logger.removeHandler(handler)
+    # Create formatters
+    file_formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    console_formatter = logging.Formatter(
+        '%(levelname)s - %(message)s'
+    )
     
-    # Set level
-    if level is None:
-        level = logging.INFO
-    logger.setLevel(level)
+    # File handler (rotating)
+    file_handler = RotatingFileHandler(
+        filename=f"{log_dir}/{name}.log",
+        maxBytes=10*1024*1024,  # 10MB
+        backupCount=5
+    )
+    file_handler.setLevel(logging.INFO)
+    file_handler.setFormatter(file_formatter)
     
-    # Create formatter
-    if log_format is None:
-        log_format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    # Console handler
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(logging.INFO)
+    console_handler.setFormatter(console_formatter)
     
-    formatter = logging.Formatter(log_format)
-    
-    # Console handler with color
-    if log_to_console:
-        console_format = "%(log_color)s%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-        console_formatter = colorlog.ColoredFormatter(
-            console_format,
-            datefmt="%Y-%m-%d %H:%M:%S",
-            log_colors={
-                'DEBUG': 'cyan',
-                'INFO': 'green',
-                'WARNING': 'yellow',
-                'ERROR': 'red',
-                'CRITICAL': 'red,bg_white',
-            }
-        )
-        
-        console_handler = logging.StreamHandler()
-        console_handler.setFormatter(console_formatter)
-        logger.addHandler(console_handler)
-    
-    # File handler
-    if log_file:
-        # Create directory if it doesn't exist
-        log_dir = os.path.dirname(log_file)
-        if log_dir:
-            os.makedirs(log_dir, exist_ok=True)
-        
-        file_handler = logging.handlers.RotatingFileHandler(
-            log_file,
-            maxBytes=10 * 1024 * 1024,  # 10 MB
-            backupCount=5
-        )
-        file_handler.setFormatter(formatter)
-        logger.addHandler(file_handler)
+    # Add handlers to logger
+    logger.addHandler(file_handler)
+    logger.addHandler(console_handler)
     
     return logger
 
@@ -103,9 +81,7 @@ def setup_trading_logger(config=None):
     # Set up the logger
     return setup_logger(
         name="trading_bot",
-        level=log_level,
-        log_file=str(log_file),
-        log_to_console=True
+        log_dir=str(log_dir)
     )
 
 def log_exception(logger, message=None):
