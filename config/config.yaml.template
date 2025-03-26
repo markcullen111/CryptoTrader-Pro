@@ -1,0 +1,87 @@
+# CryptoTrader Pro Configuration
+
+# Database Configuration
+database:
+  # Database type: 'sqlite' or 'postgresql'
+  type: sqlite
+  
+  # SQLite Configuration (used if type is 'sqlite')
+  sqlite:
+    path: data/cryptotrader.db
+  
+  # PostgreSQL Configuration (used if type is 'postgresql')
+  postgresql:
+    host: localhost
+    port: 5432
+    name: cryptotrader
+    user: your_username
+    password: your_password
+
+# Trading Configuration
+trading:
+  # Default trading pair
+  default_pair: BTC/USDT
+  
+  # Risk management settings
+  risk:
+    max_position_size: 0.01  # Maximum position size in BTC
+    max_loss_percent: 2.0    # Maximum loss per trade as percentage
+    daily_loss_limit: 5.0    # Maximum daily loss as percentage
+    
+  # Order settings
+  orders:
+    default_type: limit      # 'limit' or 'market'
+    default_leverage: 1      # 1 for spot trading
+    
+# Strategy Configuration
+strategies:
+  # Default strategy settings
+  default:
+    name: moving_average_crossover
+    parameters:
+      fast_period: 9
+      slow_period: 21
+      signal_period: 9
+      
+# Logging Configuration
+logging:
+  level: INFO  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  file: logs/cryptotrader.log
+  max_size: 10MB
+  backup_count: 5
+
+# API Configuration
+api:
+  # Exchange settings (Binance)
+  exchange:
+    name: binance
+    testnet: false  # Set to false for real trading
+    rate_limit:
+      requests_per_minute: 1200
+      orders_per_second: 10
+      
+  # Websocket settings
+  websocket:
+    reconnect_timeout: 30  # seconds
+    ping_interval: 20      # seconds
+    
+# Monitoring Configuration
+monitoring:
+  # Performance metrics
+  metrics:
+    enabled: true
+    update_interval: 60  # seconds
+    
+  # Alerts
+  alerts:
+    enabled: true
+    telegram:
+      enabled: false
+      bot_token: your_bot_token
+      chat_id: your_chat_id
+    email:
+      enabled: false
+      smtp_server: smtp.gmail.com
+      smtp_port: 587
+      sender_email: your_email@gmail.com
+      receiver_email: your_email@gmail.com 

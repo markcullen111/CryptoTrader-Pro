@@ -1,301 +1,121 @@
 # CryptoTrader Pro
 
-An advanced cryptocurrency trading platform built with Python, featuring AI-powered strategies, real-time trading, and comprehensive analytics.
+A professional cryptocurrency trading application with advanced features for automated trading, backtesting, and strategy development.
 
 ## Features
 
-- 🤖 AI-powered trading strategies
-- 📊 Real-time trading and monitoring
-- 📈 Advanced performance analytics
-- 🔄 Strategy management and optimization
-- 📉 Risk management tools
-- 🔍 Backtesting capabilities
-- 📊 Experiment tracking
-- 📱 Modern web interface
+- Real-time trading on Binance
+- Multiple trading strategies
+- Advanced backtesting capabilities
+- Machine learning model integration
+- Experiment tracking
+- Performance monitoring
+- Risk management
+- Beautiful web interface
 
-## Quick Start
+## Quick Installation
 
 ### Prerequisites
 
-- Python 3.8 or later
+- Python 3.8 or higher
 - Git
-- A Binance account with API access
 
-### API Setup
+### One-Line Installation (Linux/Mac)
 
-1. Create a Binance account if you don't have one:
-   - Go to [Binance.com](https://www.binance.com)
-   - Complete the registration and verification process
+```bash
+git clone https://github.com/yourusername/cryptotrader-pro.git && cd cryptotrader-pro && python3 install.py
+```
 
-2. Generate API Keys:
-   - Log into your Binance account
-   - Go to "API Management" in your account settings
-   - Click "Create API"
-   - Set the following permissions:
-     - ✅ Enable Reading
-     - ✅ Enable Spot & Margin Trading
-     - ❌ Disable Withdrawals
-   - Save your API Key and Secret Key securely
-
-3. Configure API Keys:
-   After running the setup script, edit the `.env` file:
-   ```bash
-   EXCHANGE_API_KEY=your_binance_api_key_here
-   EXCHANGE_API_SECRET=your_binance_secret_key_here
-   ```
-
-### Database Setup
-
-The application uses SQLite by default for data storage. For production use, you can configure PostgreSQL:
-
-1. Install PostgreSQL:
-   ```bash
-   # Ubuntu/Debian
-   sudo apt-get update
-   sudo apt-get install postgresql postgresql-contrib
-
-   # Windows
-   # Download and install from https://www.postgresql.org/download/windows/
-   ```
-
-2. Create a database:
-   ```bash
-   sudo -u postgres psql
-   CREATE DATABASE cryptotrader;
-   CREATE USER cryptotrader WITH PASSWORD 'your_secure_password';
-   GRANT ALL PRIVILEGES ON DATABASE cryptotrader TO cryptotrader;
-   \q
-   ```
-
-3. Configure database connection:
-   Edit `config/config.yaml`:
-   ```yaml
-   database:
-     type: postgresql  # or sqlite
-     host: localhost
-     port: 5432
-     name: cryptotrader
-     user: cryptotrader
-     password: your_secure_password
-   ```
-
-### Data Storage
-
-The application creates several directories for data management:
-
-- `data/`: Main data storage directory
-  - `market_data/`: Historical price data
-  - `models/`: Trained ML models
-  - `backtest/`: Backtesting results
-  - `experiments/`: Experiment tracking data
-
-### Security Notes
-
-1. Never commit your `.env` file or `config.yaml` with real credentials
-2. Use strong passwords for database access
-3. Regularly rotate your API keys
-4. Monitor your API key usage in your Binance account
-5. Consider using environment variables instead of config files in production
-
-### Installation
-
-#### Windows
+### Step-by-Step Installation
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/markcullen111/CryptoTrader-Pro.git
-   cd CryptoTrader-Pro
+   git clone https://github.com/yourusername/cryptotrader-pro.git
+   cd cryptotrader-pro
    ```
 
-2. Run the setup script:
+2. Run the installation script:
    ```bash
-   setup_windows.bat
+   # On Linux/Mac
+   python3 install.py
+
+   # On Windows
+   python install.py
    ```
 
-3. Edit the configuration files:
-   - Open `config/config.yaml` and update your exchange settings
-   - Open `.env` and add your API keys
+3. Configure your settings:
+   - Edit `config/config.yaml` with your trading preferences
+   - Edit `.env` with your API keys and secrets
 
 4. Start the application:
    ```bash
+   # On Linux/Mac
+   ./run.sh
+
+   # On Windows
    run.bat
    ```
 
-#### Linux/macOS
-
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/markcullen111/CryptoTrader-Pro.git
-   cd CryptoTrader-Pro
+5. Open your web browser and go to:
+   ```
+   http://localhost:8501
    ```
 
-2. Make the setup script executable and run it:
-   ```bash
-   chmod +x setup_linux.sh
-   ./setup_linux.sh
-   ```
+## Configuration
 
-3. Edit the configuration files:
-   - Open `config/config.yaml` and update your exchange settings
-   - Open `.env` and add your API keys
+### Setting Up API Keys
 
-4. Start the application:
-   ```bash
-   ./run.sh
-   ```
+1. Log into your Binance account
+2. Go to API Management in your account settings
+3. Create a new API key with the following permissions:
+   - Enable Reading
+   - Enable Spot & Margin Trading
+   - Disable Withdrawals
+4. Copy the API key and secret to your `.env` file
 
-### Configuration
+### Trading Configuration
 
-The setup scripts will create the following configuration files:
+Edit `config/config.yaml` to configure:
+- Trading pairs
+- Risk management settings
+- Strategy parameters
+- Monitoring preferences
+- Database settings
 
-1. `config/config.yaml`: Main configuration file
-   ```yaml
-   exchange:
-     name: binance
-     api_key: ""
-     api_secret: ""
-     testnet: false
+## Features in Detail
 
-   trading:
-     default_symbol: "BTC/USDT"
-     default_timeframe: "1h"
-     risk_per_trade: 0.02
-     max_positions: 5
+### Trading
+- Real-time market data
+- Multiple order types (market, limit)
+- Position management
+- Risk controls
 
-   risk_management:
-     max_drawdown: 0.1
-     stop_loss: 0.02
-     take_profit: 0.04
-     trailing_stop: 0.01
-   ```
+### Backtesting
+- Historical data analysis
+- Strategy optimization
+- Performance metrics
+- Risk analysis
 
-2. `.env`: Environment variables (API keys)
-   ```
-   EXCHANGE_API_KEY=your_api_key_here
-   EXCHANGE_API_SECRET=your_api_secret_here
-   ```
+### Machine Learning
+- Feature engineering
+- Model training
+- Prediction integration
+- Performance tracking
 
-### Directory Structure
-
-```
-CryptoTrader-Pro/
-├── app/                    # Application source code
-├── config/                 # Configuration files
-├── data/                   # Data storage
-├── logs/                   # Application logs
-├── models/                 # ML models
-├── tests/                  # Test suite
-├── setup_linux.sh         # Linux setup script
-├── setup_windows.bat      # Windows setup script
-├── run.sh                 # Linux run script
-├── run.bat                # Windows run script
-└── requirements.txt       # Python dependencies
-```
-
-## Development
-
-### Git Workflow
-
-We follow a structured Git workflow to maintain code quality and collaboration:
-
-#### Branch Strategy
-
-- `main`: Production-ready code
-- `develop`: Main development branch
-- `feature/*`: New features
-- `bugfix/*`: Bug fixes
-- `hotfix/*`: Urgent production fixes
-- `release/*`: Release preparation
-- `streamlit_cloud_deploy`: Streamlit Cloud deployment
-
-#### Commit Conventions
-
-We follow the [Conventional Commits](https://www.conventionalcommits.org/) specification:
-
-```
-<type>(<scope>): <description>
-
-[optional body]
-
-[optional footer(s)]
-```
-
-Types:
-- `feat`: New feature
-- `fix`: Bug fix
-- `docs`: Documentation changes
-- `style`: Code style changes (formatting, etc.)
-- `refactor`: Code refactoring
-- `perf`: Performance improvements
-- `test`: Adding or modifying tests
-- `chore`: Maintenance tasks
-
-Examples:
-```bash
-git commit -m "feat(trading): add real-time price alerts"
-git commit -m "fix(dashboard): resolve data refresh issue"
-git commit -m "docs: update installation instructions"
-```
-
-#### Development Workflow
-
-1. Create a new branch:
-   ```bash
-   git checkout -b feature/your-feature-name
-   ```
-
-2. Make your changes and commit:
-   ```bash
-   git add .
-   git commit -m "feat(scope): description"
-   ```
-
-3. Keep your branch updated:
-   ```bash
-   git fetch origin
-   git rebase origin/develop
-   ```
-
-4. Push your changes:
-   ```bash
-   git push origin feature/your-feature-name
-   ```
-
-5. Create a Pull Request:
-   - Use the PR template
-   - Link related issues
-   - Request reviews
-   - Ensure CI passes
-
-### Running Tests
-
-```bash
-pytest tests/
-```
-
-### Contributing
-
-1. Fork the repository
-2. Create a feature branch following the branch naming convention
-3. Make your changes following the commit conventions
-4. Push to your fork
-5. Create a Pull Request
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Disclaimer
-
-This software is for educational purposes only. Use at your own risk. The authors are not responsible for any financial losses incurred through the use of this software.
+### Monitoring
+- Real-time performance metrics
+- Trade history
+- Portfolio analysis
+- Risk metrics
 
 ## Support
 
-For support, please:
-1. Check the [Documentation](docs/)
-2. Search existing [Issues](https://github.com/markcullen111/CryptoTrader-Pro/issues)
-3. Open a new issue with:
-   - Clear description
-   - Steps to reproduce
-   - Expected vs actual behavior
-   - System information 
+For issues and feature requests, please use the GitHub issue tracker.
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Security Notice
+
+Never share your API keys or secrets. The `.env` file containing your credentials is excluded from version control for security. 
