@@ -27,7 +27,7 @@ def get_performance_analytics():
     """Get or create performance analytics instance."""
     return PerformanceAnalytics()
 
-@st.cache_data
+@st.cache_data(ttl=60)  # Cache for 60 seconds
 async def get_market_data():
     """Get market data from exchange."""
     try:
