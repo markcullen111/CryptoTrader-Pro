@@ -271,8 +271,8 @@ class ExchangeClient:
             if not self.is_initialized:
                 await self.initialize()
             
-            # Convert timeframe to exchange format
-            timeframe = timeframe.upper().replace('H', 'h')  # Fix deprecation warning
+            # Convert timeframe to exchange format (use lowercase 'h')
+            timeframe = timeframe.replace('H', 'h')
             
             ohlcv = await self._make_request('fetch_ohlcv', symbol, {
                 'timeframe': timeframe,
