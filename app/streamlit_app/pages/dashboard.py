@@ -51,6 +51,8 @@ async def get_market_data(symbol='BTC/USDT', timeframe='1h', limit=100):
         exchange_client = ExchangeClient()
         df = exchange_client.get_historical_data(symbol, timeframe, limit)
         df = calculate_indicators(df)
+        # Convert timestamp to datetime with 'h' unit
+        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='h')
         return df.to_dict()  # Convert to dict for caching
     except Exception as e:
         logger.error(f"Error fetching market data: {e}")
