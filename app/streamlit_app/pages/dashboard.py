@@ -51,9 +51,23 @@ async def get_market_data(symbol='BTC/USDT', timeframe='1h', limit=100):
         exchange_client = ExchangeClient()
         df = exchange_client.get_historical_data(symbol, timeframe, limit)
         df = calculate_indicators(df)
-        # Convert timestamp to datetime with 'h' unit
-        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='h')
-        return df.to_dict()  # Convert to dict for caching
+        # Convert timestamp to datetime (timestamps are in milliseconds)
+        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+        # Convert to serializable format
+        return {
+            'timestamp': df['timestamp'].astype(str).tolist(),
+            'open': df['open'].tolist(),
+            'high': df['high'].tolist(),
+            'low': df['low'].tolist(),
+            'close': df['close'].tolist(),
+            'volume': df['volume'].tolist(),
+            'RSI': df['RSI'].tolist(),
+            'MACD': df['MACD'].tolist(),
+            'Signal': df['Signal'].tolist(),
+            'BB_upper': df['BB_upper'].tolist(),
+            'BB_lower': df['BB_lower'].tolist(),
+            'BB_middle': df['BB_middle'].tolist()
+        }
     except Exception as e:
         logger.error(f"Error fetching market data: {e}")
         return None
@@ -175,7 +189,7 @@ async def get_multiple_market_data(symbols=['BTC/USDT', 'ETH/USDT', 'BNB/USDT', 
             ohlcv = await exchange_client.get_ohlcv(symbol, timeframe, limit)
             if ohlcv:
                 df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
-                df['timestamp'] = pd.to_datetime(df['timestamp'], unit='h')
+                df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
                 df.set_index('timestamp', inplace=True)
                 data_dict[symbol] = df['close']
         
