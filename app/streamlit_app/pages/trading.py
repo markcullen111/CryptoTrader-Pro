@@ -1,6 +1,7 @@
 import streamlit as st
 import asyncio
 import pandas as pd
+import os
 from app.utils.logger import setup_logger
 from app.trading.exchange_client import ExchangeClient
 from app.trading.strategy_manager import StrategyManager
@@ -12,7 +13,9 @@ logger = setup_logger(__name__)
 @st.cache_resource
 def get_exchange_client():
     """Get or create exchange client instance."""
-    return ExchangeClient()
+    api_key = os.getenv('EXCHANGE_API_KEY')
+    api_secret = os.getenv('EXCHANGE_API_SECRET')
+    return ExchangeClient(api_key=api_key, api_secret=api_secret, debug=False)
 
 @st.cache_resource
 def get_strategy_manager():
@@ -26,8 +29,9 @@ def get_performance_analytics():
 
 @st.cache_data
 async def get_market_data():
+    """Get market data from exchange."""
     try:
-        exchange_client = ExchangeClient()
+        exchange_client = get_exchange_client()
         data = await exchange_client.get_market_data()
         # Convert to serializable format
         return {
@@ -63,7 +67,7 @@ async def display_trading_page():
         
         with col1:
             st.subheader("Market Data")
-            market_data = await get_market_data()
+            market_data = await get_market_data()  # Properly await the async function
             if market_data:
                 st.write("Current Market Prices:")
                 for symbol, price in market_data['prices'].items():
